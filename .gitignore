@@ -31,3 +31,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### CUSTOM ###
+application-local.yml
+tmp
+ai-code-mother-fontend/ai-code-mother-fontend/src
+ai-code-mother-fontend/ai-code-mother-fontend/node_modules
+
