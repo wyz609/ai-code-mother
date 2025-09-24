@@ -44,7 +44,7 @@ class AiCodeMotherApplicationTests {
         LocalDateTime startTime = LocalDateTime.now();
         System.out.println("开始生成代码...");
         Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("做一个番茄计时器，可以进行规划学习时间，倒计时，待办事件等功能" +
-                "页面进行现代化UI设计，可以适量添加一些毛玻璃效果样式，代码不超过700行", CodeGenTypeEnum.MULTI_FILE);
+                "页面进行现代化UI设计，可以适量添加一些毛玻璃效果样式，代码不超过700行", CodeGenTypeEnum.MULTI_FILE,1L);
 //        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("做一个打卡网页，代码不超过50行", CodeGenTypeEnum.MULTI_FILE);
         // 阻塞等待所有数据收集完成
         List<String> result = codeStream.collectList().block();
@@ -57,7 +57,7 @@ class AiCodeMotherApplicationTests {
 
     @Test
     void generateAndSaveHtmlCodeStream(){
-        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("制作一个计算器，代码控制在20行左右", CodeGenTypeEnum.HTML);
+        Flux<String> codeStream = aiCodeGeneratorFacade.generateAndSaveCodeStream("制作一个计算器，代码控制在20行左右", CodeGenTypeEnum.HTML,1L);
         List<String> result = codeStream.collectList().block();
         Assertions.assertNotNull(result);
         String completeContent = String.join("", result);

@@ -45,7 +45,7 @@ class AICodeGeneratorFacadeTest {
         when(aiCodeGeneratorService.generateHtmlCode(anyString())).thenReturn(htmlCodeResult);
 
         // 执行测试
-        File result = aiCodeGeneratorFacade.generateAndSaveCode(userMessage, codeGenType);
+        File result = aiCodeGeneratorFacade.generateAndSaveCode(userMessage, codeGenType,1L);
 
         // 验证结果
         assertNotNull(result);
@@ -67,7 +67,7 @@ class AICodeGeneratorFacadeTest {
         when(aiCodeGeneratorService.generateMultiFileCode(anyString())).thenReturn(multiFileCodeResult);
 
         // 执行测试
-        File result = aiCodeGeneratorFacade.generateAndSaveCode(userMessage, codeGenType);
+        File result = aiCodeGeneratorFacade.generateAndSaveCode(userMessage, codeGenType,1L);
 
         // 验证结果
         assertNotNull(result);
@@ -81,7 +81,7 @@ class AICodeGeneratorFacadeTest {
 
         // 执行测试并验证异常
         BusinessException exception = assertThrows(BusinessException.class, () -> {
-            aiCodeGeneratorFacade.generateAndSaveCode(userMessage, null);
+            aiCodeGeneratorFacade.generateAndSaveCode(userMessage, null,1L);
         });
 
         // 验证异常信息
@@ -99,7 +99,7 @@ class AICodeGeneratorFacadeTest {
 
         // 执行测试并验证异常
         BusinessException exception = assertThrows(BusinessException.class, () -> {
-            aiCodeGeneratorFacade.generateAndSaveCode(userMessage, unsupportedType);
+            aiCodeGeneratorFacade.generateAndSaveCode(userMessage, unsupportedType,1L);
         });
 
         // 验证异常信息包含类型信息
@@ -162,7 +162,7 @@ class AICodeGeneratorFacadeTest {
 
         // 执行测试并验证异常
         BusinessException exception = assertThrows(BusinessException.class, () -> {
-            aiCodeGeneratorFacade.generateAndSaveCodeStream(userMessage, null);
+            aiCodeGeneratorFacade.generateAndSaveCodeStream(userMessage, null,1L);
         });
 
         // 验证异常信息

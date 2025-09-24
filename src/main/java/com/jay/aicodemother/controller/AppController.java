@@ -2,6 +2,7 @@ package com.jay.aicodemother.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.jay.aicodemother.annotation.AuthCheck;
 import com.jay.aicodemother.common.BaseResponse;
 import com.jay.aicodemother.common.DeleteRequest;
@@ -19,11 +20,16 @@ import com.mybatisflex.core.paginate.Page;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 import com.jay.aicodemother.model.entity.App;
 import com.jay.aicodemother.service.AppService;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /**
  * 应用 控制层。
@@ -69,6 +75,101 @@ public class AppController {
         
         return ResultUtils.success(app.getId());
     }
+
+    /**
+     * 应用部署
+     *
+     * @param appDeployRequest 部署请求
+     * @param request          请求
+     * @return 部署 URL
+     */
+    @PostMapping("/deploy")
+    public BaseResponse<String> deployApp(@RequestBody AppDeployRequest appDeployRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(appDeployRequest == null, ErrorCode.PARAMS_ERROR);
+        Long appId = appDeployRequest.getAppId();
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+        // 调用服务部署应用
+        String deployUrl = appService.deployApp(appId, loginUser);
+        return ResultUtils.success(deployUrl);
+    }
+
+
+    /**
+     * 应用聊天生成代码 流式生成 SSE
+     * @param appId 应用ID
+     * @param message 用户信息
+     * @param request 请求对象
+     * @return 生成结果流
+     */
+    @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
+                                                       @RequestParam String message,
+                                                       HttpServletRequest request) {
+        log.info("用户开始生成代码，appId: {}, message: {}", appId, message);
+        
+        // 参数校验：检查应用ID是否有效（非空且大于0）
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID无效");
+        // 参数校验：检查用户消息是否为空或空白
+        ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
+        
+        // 获取当前登录用户信息，用于权限验证和日志记录
+        User loginUser = userService.getLoginUser(request);
+        
+        try {
+            // 调用服务层生成代码（流式），返回一个数据流
+            Flux<String> contentFlux = appService.chatToGenCode(appId, message, loginUser)
+                    // 添加背压处理，缓冲大小为32
+                    .onBackpressureBuffer(32);
+            
+            // 处理数据流，将每个数据块包装成SSE格式
+            return contentFlux
+                    .map(chunk -> {
+                        // 将内容包装成 {"data": "内容"} 的JSON对象格式，符合统一响应结构体
+                        Map<String, String> wrapper = Map.of("d", chunk);
+                        String jsonData = JSONUtil.toJsonStr(wrapper);
+                        // 构建SSE事件对象，包含数据部分
+                        return ServerSentEvent.<String>builder()
+                                .data(jsonData)
+                                .build();
+                    })
+                    // 在数据流结束后发送一个"done"事件，通知客户端数据传输完成
+                    .concatWith(Mono.just(
+                            ServerSentEvent.<String>builder()
+                                    .event("done")  // 自定义事件类型为"done"
+                                    .data("")       // 空数据体
+                                    .build()
+                    ))
+                    // 记录成功完成日志
+                    .doOnComplete(() -> log.info("代码生成完成，appId: {}, userId: {}", appId, loginUser.getId()))
+                    // 记录错误日志
+                    .doOnError(error -> log.error("代码生成过程中发生错误，appId: {}, userId: {}, error: {}", 
+                            appId, loginUser.getId(), error.getMessage(), error));
+        } catch (Exception e) {
+            // 记录异常日志
+            log.error("调用代码生成服务时发生异常，appId: {}, userId: {}, error: {}", 
+                    appId, loginUser.getId(), e.getMessage(), e);
+            // 构造错误响应
+            Map<String, String> errorWrapper = Map.of("e", "代码生成过程中发生错误");
+            String errorJsonData = JSONUtil.toJsonStr(errorWrapper);
+            ServerSentEvent<String> errorEvent = ServerSentEvent.<String>builder()
+                    .event("error")
+                    .data(errorJsonData)
+                    .build();
+            
+            // 返回错误事件并结束流
+            return Flux.just(errorEvent)
+                    .concatWith(Mono.just(
+                            ServerSentEvent.<String>builder()
+                                    .event("done")
+                                    .data("")
+                                    .build()
+                    ));
+        }
+    }
+
+
 
     /**
      * 更新自己的应用（仅支持更新应用名称）

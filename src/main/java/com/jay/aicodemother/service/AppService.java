@@ -1,11 +1,13 @@
 package com.jay.aicodemother.service;
 
 import com.jay.aicodemother.model.dto.app.AppQueryRequest;
+import com.jay.aicodemother.model.entity.User;
 import com.jay.aicodemother.model.vo.AppVO;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
 import com.jay.aicodemother.model.entity.App;
 import com.mybatisflex.core.paginate.Page;
+import reactor.core.publisher.Flux;
 
 import java.util.List;
 
@@ -31,6 +33,22 @@ public interface AppService extends IService<App> {
      * @return 脱敏后的应用列表
      */
     List<AppVO> getAppVOList(List<App> appList);
+
+    /**
+     *  生成代码
+     * @param appId
+     * @param message
+     * @param loginUser
+     */
+     Flux<String> chatToGenCode(Long appId, String message, User loginUser);
+
+    /**
+     * 部署应用
+     * @param appId
+     * @param loginUser
+     * @return
+     */
+     String deployApp(Long appId, User loginUser);
 
     /**
      * 获取查询条件
