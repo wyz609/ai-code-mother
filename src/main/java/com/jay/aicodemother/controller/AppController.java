@@ -126,7 +126,7 @@ public class AppController {
             // 处理数据流，将每个数据块包装成SSE格式
             return contentFlux
                     .map(chunk -> {
-                        // 将内容包装成 {"data": "内容"} 的JSON对象格式，符合统一响应结构体
+                        // 将内容包装成 {"d": "内容"} 的JSON对象格式，符合统一响应结构体
                         Map<String, String> wrapper = Map.of("d", chunk);
                         String jsonData = JSONUtil.toJsonStr(wrapper);
                         // 构建SSE事件对象，包含数据部分
@@ -241,7 +241,7 @@ public class AppController {
     /**
      * 分页查询自己的应用列表
      */
-    @PostMapping("/my/list/page")
+    @PostMapping("/my/list/page/vo")
     public BaseResponse<Page<AppVO>> listMyAppsByPage(@RequestBody AppQueryRequest appQueryRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR);
         
@@ -263,7 +263,7 @@ public class AppController {
     /**
      * 分页查询精选应用列表（无需登录）
      */
-    @PostMapping("/featured/list/page")
+    @PostMapping("/good/list/page/vo")
     public BaseResponse<Page<AppVO>> listFeaturedAppsByPage(@RequestBody AppQueryRequest appQueryRequest) {
         ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR);
         
@@ -327,7 +327,7 @@ public class AppController {
     /**
      * 管理员分页查询应用列表
      */
-    @PostMapping("/admin/list/page")
+    @PostMapping("/admin/list/page/vo")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Page<AppVO>> listAppsByPageForAdmin(@RequestBody AppQueryRequest appQueryRequest) {
         ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR);
@@ -344,7 +344,7 @@ public class AppController {
     /**
      * 管理员根据 id 获取应用详情
      */
-    @GetMapping("/admin/get")
+    @GetMapping("/admin/get/vo")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<AppVO> getAppByIdForAdmin(long id) {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
@@ -354,6 +354,7 @@ public class AppController {
         
         return ResultUtils.success(appService.getAppVO(app));
     }
+
 
     // endregion
 }
