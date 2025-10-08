@@ -76,6 +76,7 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
         ThrowUtils.throwIf(pageSize <= 0 || pageSize > 50, ErrorCode.PARAMS_ERROR, "页面大小必须在1-50之间");
         ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
+        log.info("开始查询 appId: {} 的对话历史", appId);
         // 验证权限：只有应用创建者和管理员可以查看
         App app = appService.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
@@ -94,32 +95,39 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
     @Override
     public int loadChatHistoryToMemory(Long appId, MessageWindowChatMemory chatMemory, int maxCount) {
         try {
+            ThrowUtils.throwIf(appId == null, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
+            ThrowUtils.throwIf(maxCount <= 0, ErrorCode.PARAMS_ERROR, "最大数量必须大于0");
+            ThrowUtils.throwIf(chatMemory == null, ErrorCode.PARAMS_ERROR, "聊天记忆对象不能为空");
+            
             QueryWrapper queryWrapper = QueryWrapper.create()
                     .eq(ChatHistory::getAppId, appId)
-                    .orderBy(ChatHistory::getCreateTime, false)
-                    .limit(1, maxCount);
+                    .orderBy(ChatHistory::getCreateTime, false) // 按时间倒序
+                    .limit(1,maxCount);
             List<ChatHistory> historyList = this.list(queryWrapper);
             if (CollUtil.isEmpty(historyList)) {
+                chatMemory.clear();
                 return 0;
             }
             // 反转列表，确保按照时间正序（老的在前，新的在后）
             Collections.reverse(historyList);
-            // 按照时间顺序将消息添加到记忆中
-            int loadedCount = 0;
             // 先清理历史缓存，防止重复加载
             chatMemory.clear();
+            // 按照时间顺序将消息添加到记忆中
+            int loadedCount = 0;
             for (ChatHistory history : historyList) {
                 if (ChatHistoryMessageTypeEnum.USER.getValue().equals(history.getMessageType())) {
                     chatMemory.add(UserMessage.from(history.getMessage()));
+                    loadedCount++;
                 } else if (ChatHistoryMessageTypeEnum.AI.getValue().equals(history.getMessageType())) {
                     chatMemory.add(AiMessage.from(history.getMessage()));
+                    loadedCount++;
                 }
-                loadedCount++;
+                // 忽略其他类型的消息，但仍然计入处理总数中
             }
             log.info("成功为 appId: {} 加载 {} 条历史消息", appId, loadedCount);
             return loadedCount;
         } catch (Exception e) {
-            log.error("加载历史对话失败，appId: {}, error: {}", appId, e.getMessage(), e);
+            log.error("加载历史对话失败，appId: {}", appId, e);
             // 加载失败不影响系统运行，只是没有历史上下文
             return 0;
         }

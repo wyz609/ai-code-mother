@@ -12,6 +12,7 @@ package com.jay.aicodemother.core;
 import com.jay.aicodemother.ai.AiCodeGeneratorService;
 import com.jay.aicodemother.ai.model.HtmlCodeResult;
 import com.jay.aicodemother.ai.model.MultiFileCodeResult;
+import com.jay.aicodemother.config.AiCodeGeneratorServiceFactory;
 import com.jay.aicodemother.exception.BusinessException;
 import com.jay.aicodemother.exception.ErrorCode;
 import com.jay.aicodemother.model.enums.CodeGenTypeEnum;
@@ -37,7 +38,9 @@ public class AICodeGeneratorFacade {
     /**
      * AI代码生成服务，通过构造函数注入
      */
-    private final AiCodeGeneratorService aiCodeGeneratorService;
+//    private final AiCodeGeneratorService aiCodeGeneratorService;
+
+    private final AiCodeGeneratorServiceFactory aiCodeGeneratorServiceFactory;
 
     /**
      * 统一入口：根据类型生成并保存代码
@@ -51,6 +54,8 @@ public class AICodeGeneratorFacade {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成类型为空");
         }
+        // 根据 appId 获取对应的 AI 服务实例
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId);
         return switch (codeGenTypeEnum) {
             case HTML -> {
                 HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode(userMessage);
@@ -77,6 +82,8 @@ public class AICodeGeneratorFacade {
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "生成类型为空");
         }
+        // 根据 appId 获取对应的 AI 服务实例
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId);
         return switch (codeGenTypeEnum) {
             case HTML -> {
                 Flux<String> codeStream = aiCodeGeneratorService.generateHtmlCodeStream(userMessage);

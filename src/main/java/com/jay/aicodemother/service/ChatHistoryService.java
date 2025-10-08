@@ -3,14 +3,12 @@ package com.jay.aicodemother.service;
 import com.jay.aicodemother.model.dto.chathistory.ChatHistoryQueryRequest;
 import com.jay.aicodemother.model.entity.ChatHistory;
 import com.jay.aicodemother.model.entity.User;
-import com.jay.aicodemother.model.vo.ChatHistoryVO;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * 对话历史 服务层。

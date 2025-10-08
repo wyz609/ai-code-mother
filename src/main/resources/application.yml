@@ -6,12 +6,24 @@ spring:
     url: jdbc:mysql://localhost:3306/ai_code_mother?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
     username: root
     password: 20040609
+  session:
+    sotre-type: redis
+    time-to-live: 2592000
   profiles:
     active: local
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      ttl: 3600
 server:
   port: 8123
   servlet:
     context-path: /api
+    session:
+      cookie:
+        max-age: 2592000
 
 # springdoc-openapi
 springdoc:

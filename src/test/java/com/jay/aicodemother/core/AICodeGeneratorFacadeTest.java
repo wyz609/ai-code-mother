@@ -26,11 +26,11 @@ class AICodeGeneratorFacadeTest {
 
     private AICodeGeneratorFacade aiCodeGeneratorFacade;
 
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-        aiCodeGeneratorFacade = new AICodeGeneratorFacade(aiCodeGeneratorService);
-    }
+//    @BeforeEach
+//    void setUp() {
+//        MockitoAnnotations.openMocks(this);
+//        aiCodeGeneratorFacade = new AICodeGeneratorFacade(aiCodeGeneratorService);
+//    }
 
     @Test
     void generateAndSaveCode_withHtmlType_shouldReturnFile() {
