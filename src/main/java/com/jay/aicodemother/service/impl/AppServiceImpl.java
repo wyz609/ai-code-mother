@@ -7,6 +7,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.jay.aicodemother.constant.AppConstant;
 import com.jay.aicodemother.core.AICodeGeneratorFacade;
+import com.jay.aicodemother.core.handler.StreamHandlerExecutor;
 import com.jay.aicodemother.exception.BusinessException;
 import com.jay.aicodemother.exception.ErrorCode;
 import com.jay.aicodemother.exception.ThrowUtils;
@@ -55,6 +56,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private final AICodeGeneratorFacade aiCodeGeneratorFacade;
 
     private final ChatHistoryService historyService;
+
+    // 流式处理执行器
+    private final StreamHandlerExecutor handlerExecutor;
 
     @Override
     public AppVO getAppVO(App app) {
@@ -116,28 +120,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
         // 6. 调用 AI 生成代码
         Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
+        // 7. 使用流式处理器执行器进行处理流式响应结果
+        return handlerExecutor.doExecute(contentFlux, historyService, appId, loginUser, codeGenTypeEnum);
 
-        // 7. 搜集 AI 响应内容并在完成后记录到对话历史
-        StringBuilder aiResponseBuilder = new StringBuilder();
-        return contentFlux.map(chunk -> {
-                    // 收集 AI 响应内容
-                    aiResponseBuilder.append(chunk);
-                    return chunk;
-                })
-                .doOnComplete(() -> {
-                    // 添加 AI 响应内容到对话历史
-                    String aiResponse = aiResponseBuilder.toString();
-                    if (StrUtil.isNotBlank(aiResponse)) {
-                        historyService.addChatMessage(appId, aiResponse,
-                                ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
-                    }
-                })
-                .doOnError(throwable -> {
-                    // 添加错误信息到对话历史
-                    String errorMessage = "AI 回复失败" + throwable.getMessage();
-                    historyService.addChatMessage(appId, errorMessage,
-                            ChatHistoryMessageTypeEnum.ERROR.getValue(), loginUser.getId());
-                });
     }
 
     @Override

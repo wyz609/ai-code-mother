@@ -29,10 +29,11 @@ import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
+import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import dev.langchain4j.service.AiServices;
-import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -44,16 +45,15 @@ import java.time.Duration;
 @Slf4j
 public class AiCodeGeneratorServiceFactory {
 
-    private final ChatModel chatModel;
-//    @Qualifier("openAiStreamingChatModel")
-    private final StreamingChatModel openAiStreamingChatModel;
+    private ChatModel chatModel;
 
-    private final StreamingChatModel reasoningStreamingChatModel;
+    private OpenAiStreamingChatModel openAiStreamingChatModel;
 
-    private final RedisChatMemoryStore redisChatMemoryStore;
+    private StreamingChatModel reasoningStreamingChatModel;
 
-    private final ChatHistoryService chatHistoryService;
+    private RedisChatMemoryStore redisChatMemoryStore;
 
+    private ChatHistoryService chatHistoryService;
     /**
      * AI 服务实例缓存
      *  缓存策略
@@ -82,6 +82,7 @@ public class AiCodeGeneratorServiceFactory {
      */
     public AiCodeGeneratorService getAiCodeGeneratorService(Long appId, CodeGenTypeEnum codeGenType){
         String cacheKey = buildCacheKey(appId, codeGenType);
+        // 如果缓存中没有对应 Key 相应的实例， 则调用 createAiCodeGeneratorService 方法创建实例 并保存到缓存中供后续使用
         return serviceCache.get(cacheKey, key -> createAiCodeGeneratorService(appId, codeGenType));
     }
 
@@ -115,6 +116,7 @@ public class AiCodeGeneratorServiceFactory {
                 {
                     // vue 项目生成使用推理模型
                     case VUE_PROJECT -> AiServices.builder(AiCodeGeneratorService.class)
+                            .chatModel(chatModel) // 默认模型
                             .streamingChatModel(reasoningStreamingChatModel)
                             .chatMemoryProvider(memory -> chatMemory)
                             .tools(new FileWriteTool())
@@ -123,7 +125,7 @@ public class AiCodeGeneratorServiceFactory {
                             .build();
                     case MULTI_FILE,HTML -> AiServices.builder(AiCodeGeneratorService.class)
                             .chatModel(chatModel)
-                            .streamingChatModel(reasoningStreamingChatModel)
+                            .streamingChatModel(openAiStreamingChatModel)
                             .chatMemory(chatMemory)
                             .build();
                     default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR,"不支持的代码生成类型: " + codeGenType.getValue());

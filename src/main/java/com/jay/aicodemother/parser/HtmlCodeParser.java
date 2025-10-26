@@ -29,6 +29,13 @@ public class HtmlCodeParser implements CodeParser<HtmlCodeResult> {
     public HtmlCodeResult parseCode(String codeContent) {
         HtmlCodeResult result = new HtmlCodeResult();
 
+        // 如果输入为空，直接返回空结果
+        if (codeContent == null || codeContent.trim().isEmpty()) {
+            result.setHtmlCode("");
+            result.setDescription("未生成任何代码内容");
+            return result;
+        }
+
         // 匹配HTML代码块（## index.html 后跟 ```html
         Pattern htmlPattern = Pattern.compile("## index\\.html\\s*```html([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
         Matcher htmlMatcher = htmlPattern.matcher(codeContent);

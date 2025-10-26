@@ -13,6 +13,7 @@ import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
@@ -28,6 +29,7 @@ public class ReasoningStreamingChatModelConfig {
      * 推理流式模型
      * @return
      */
+    @Bean
     public StreamingChatModel reasoningStreamingChatModel(){
         // 按理来说工程化项目应该使用推理模型来生成代码，但是这里为了演示，使用 简单模型
         final String modelName = "deepseek-chat";

@@ -68,7 +68,7 @@ public class AppController {
         app.setUserId(loginUser.getId());
         app.setPriority(0); // 默认优先级为0
         // 展示设置为多文件生成类型
-        app.setCodeGenType(CodeGenTypeEnum.MULTI_FILE.getValue());
+        app.setCodeGenType(CodeGenTypeEnum.VUE_PROJECT.getValue());
         
         boolean result = appService.save(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);

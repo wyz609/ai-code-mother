@@ -1,5 +1,5 @@
 ///**
-// * Class name: ReasoningStreamingChatModelConfig
+// * Class name: StreamingChatModelConfig
 // * Package: com.jay.aicodemother.config
 // * Description:
 // *
@@ -9,46 +9,36 @@
 // */
 //package com.jay.aicodemother.config;
 //
-//import dev.langchain4j.model.chat.StreamingChatModel;
+//import dev.langchain4j.model.chat.ChatModel;
+//import dev.langchain4j.model.openai.OpenAiChatModel;
 //import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
-//import org.springframework.beans.factory.annotation.Value;
-//import org.springframework.boot.context.properties.ConfigurationProperties;
 //import org.springframework.context.annotation.Bean;
 //import org.springframework.context.annotation.Configuration;
-//import org.springframework.context.annotation.Scope;
-//
-//import java.time.Duration;
-//import java.time.temporal.ChronoUnit;
 //
 //@Configuration
-//@ConfigurationProperties(prefix = "langchain4j.open-ai.streaming-chat-model")
 //public class StreamingChatModelConfig {
 //
-//    @Value("${base-url}")
-//    String baseUrl;
-//    @Value("${api-key}")
-//    String apiKey;
-//    @Value("${model-name}")
-//    String modelName;
-//    @Value("${max-tokens}")
-//    Integer maxTokens;
-//    @Value("${log-requests}")
-//    Boolean logRequests;
-//    @Value("${log-responses}")
-//    Boolean logResponses;
-//
-//    @Bean
-//    @Scope("prototype")
-//    public StreamingChatModel StreamingChatModel() {
+//    @Bean("openAiStreamingChatModel")
+//    public OpenAiStreamingChatModel openAiStreamingChatModel() {
 //        return OpenAiStreamingChatModel.builder()
-//                .baseUrl(baseUrl)
-//                .apiKey(apiKey)
-//                .modelName(modelName)
-//                .maxTokens(maxTokens)
-//                .logRequests(logRequests)
-//                .logResponses(logResponses)
-//                .timeout(Duration.of(20, ChronoUnit.MILLIS))
+//                .baseUrl("https://api.openai.com/v1")
+//                .apiKey(System.getenv().getOrDefault("OPENAI_API_KEY", "your-api-key-here"))
+//                .modelName("gpt-4o-mini")
+//                .logRequests(false)
+//                .logResponses(false)
+//                .httpClientBuilder(dev.langchain4j.http.client.jdk.JdkHttpClientBuilderFactory.INSTANCE)
 //                .build();
 //    }
 //
+//    @Bean
+//    public ChatModel chatModel() {
+//        return OpenAiChatModel.builder()
+//                .baseUrl("https://api.openai.com/v1")
+//                .apiKey(System.getenv().getOrDefault("OPENAI_API_KEY", "your-api-key-here"))
+//                .modelName("gpt-4o-mini")
+//                .logRequests(false)
+//                .logResponses(false)
+//                .httpClientBuilder(dev.langchain4j.http.client.jdk.JdkHttpClientBuilderFactory.INSTANCE)
+//                .build();
+//    }
 //}
