@@ -9,36 +9,37 @@
 // */
 //package com.jay.aicodemother.config;
 //
-//import dev.langchain4j.model.chat.ChatModel;
-//import dev.langchain4j.model.openai.OpenAiChatModel;
 //import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
+//import lombok.Data;
+//import org.springframework.boot.context.properties.ConfigurationProperties;
 //import org.springframework.context.annotation.Bean;
 //import org.springframework.context.annotation.Configuration;
 //
 //@Configuration
+//@Data
+//@ConfigurationProperties(prefix = "langchain4j.open-ai.streaming-chat-model")
 //public class StreamingChatModelConfig {
+//
+//    private String apiKey;
+//
+//    private String baseUrl;
+//
+//    private String modelName;
+//
+//    private int maxTokens;
+//
+//    private boolean logRequests;
+//
+//    private boolean logResponses;
 //
 //    @Bean("openAiStreamingChatModel")
 //    public OpenAiStreamingChatModel openAiStreamingChatModel() {
 //        return OpenAiStreamingChatModel.builder()
-//                .baseUrl("https://api.openai.com/v1")
-//                .apiKey(System.getenv().getOrDefault("OPENAI_API_KEY", "your-api-key-here"))
-//                .modelName("gpt-4o-mini")
-//                .logRequests(false)
-//                .logResponses(false)
-//                .httpClientBuilder(dev.langchain4j.http.client.jdk.JdkHttpClientBuilderFactory.INSTANCE)
-//                .build();
-//    }
-//
-//    @Bean
-//    public ChatModel chatModel() {
-//        return OpenAiChatModel.builder()
-//                .baseUrl("https://api.openai.com/v1")
-//                .apiKey(System.getenv().getOrDefault("OPENAI_API_KEY", "your-api-key-here"))
-//                .modelName("gpt-4o-mini")
-//                .logRequests(false)
-//                .logResponses(false)
-//                .httpClientBuilder(dev.langchain4j.http.client.jdk.JdkHttpClientBuilderFactory.INSTANCE)
+//                .baseUrl(baseUrl)
+//                .apiKey(apiKey)
+//                .modelName(modelName)
+//                .logRequests(logRequests)
+//                .logResponses(logResponses)
 //                .build();
 //    }
 //}

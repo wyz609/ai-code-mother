@@ -31,6 +31,8 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import dev.langchain4j.service.AiServices;
+import jakarta.annotation.Resource;
+import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,18 +43,24 @@ import org.springframework.context.annotation.Configuration;
 import java.time.Duration;
 
 @Configuration
-@RequiredArgsConstructor
+//@RequiredArgsConstructor
+@AllArgsConstructor
 @Slf4j
 public class AiCodeGeneratorServiceFactory {
 
-    private ChatModel chatModel;
+    @Resource
+    private  ChatModel chatModel;
 
+    @Resource
     private OpenAiStreamingChatModel openAiStreamingChatModel;
 
+    @Resource
     private StreamingChatModel reasoningStreamingChatModel;
 
+    @Resource
     private RedisChatMemoryStore redisChatMemoryStore;
 
+    @Resource
     private ChatHistoryService chatHistoryService;
     /**
      * AI 服务实例缓存
