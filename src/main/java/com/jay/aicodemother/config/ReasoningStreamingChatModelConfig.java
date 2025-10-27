@@ -32,11 +32,11 @@ public class ReasoningStreamingChatModelConfig {
     @Bean
     public StreamingChatModel reasoningStreamingChatModel(){
         // 按理来说工程化项目应该使用推理模型来生成代码，但是这里为了演示，使用 简单模型
-        final String modelName = "deepseek-chat";
-        final int maxTokens = 8192;
+//        final String modelName = "deepseek-chat";
+//        final int maxTokens = 8192;
         // 生产环境使用
-        // final String modelName = "deepseek-reasoner";
-        // final int maxTokens = 327688;
+         final String modelName = "deepseek-reasoner";
+         final int maxTokens = 327688;
 
         return OpenAiStreamingChatModel.builder()
                 .apiKey(apiKey)

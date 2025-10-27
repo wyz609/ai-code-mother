@@ -27,7 +27,7 @@ import reactor.core.publisher.Flux;
 @RequiredArgsConstructor
 public class StreamHandlerExecutor {
 
-    private JsonMessageStreamHandler jsonMessageStreamHandler;
+    private final JsonMessageStreamHandler jsonMessageStreamHandler;
 
     /**
      * 创建流式处理器并处理聊天历史

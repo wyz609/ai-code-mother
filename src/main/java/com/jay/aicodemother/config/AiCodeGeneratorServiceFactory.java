@@ -111,7 +111,7 @@ public class AiCodeGeneratorServiceFactory {
                 .builder()
                 .id(appId)
                 .chatMemoryStore(redisChatMemoryStore)
-                .maxMessages(20)
+                .maxMessages(100)
                 .build();
         try {
             // 从数据库中加载历史对话到记忆中

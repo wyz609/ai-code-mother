@@ -7,6 +7,7 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.jay.aicodemother.constant.AppConstant;
 import com.jay.aicodemother.core.AICodeGeneratorFacade;
+import com.jay.aicodemother.core.builder.VueProjectBuilder;
 import com.jay.aicodemother.core.handler.StreamHandlerExecutor;
 import com.jay.aicodemother.exception.BusinessException;
 import com.jay.aicodemother.exception.ErrorCode;
@@ -59,6 +60,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     // 流式处理执行器
     private final StreamHandlerExecutor handlerExecutor;
+
+    // Vue 项目构建器
+    private final VueProjectBuilder vueProjectBuilder;
 
     @Override
     public AppVO getAppVO(App app) {
@@ -159,7 +163,19 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "源目录不存在,请先生成代码");
         }
 
-        // 7. 复制文件到部署目录
+        // 7. Vue 项目特殊处理 ： 执行构建
+        CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeGenType);
+        if(codeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT){
+            // Vue 项目需要构建
+            boolean buildSuccess = vueProjectBuilder.builderProject(sourcePath);
+            ThrowUtils.throwIf(!buildSuccess, ErrorCode.SYSTEM_ERROR, "Vue 项目构建失败,请重试");
+            // 检查 dist 目录是否存在
+            File distDir = new File(sourceDir, "dist");
+            ThrowUtils.throwIf(!distDir.exists() || !distDir.isDirectory(), ErrorCode.SYSTEM_ERROR, "Vue 项目构建成功，但未能生成 dist 目录");
+            // 构建完成后， 需要将构建后的文件复制到部署目录
+            sourceDir = distDir;
+        }
+        // 8. 复制文件到部署目录
         String deployDirPath = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
         File deployDir = new File(deployDirPath);
 
@@ -175,7 +191,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "部署失败:" + e.getMessage());
         }
 
-        // 8. 更新应用的 deployKey 和部署时间
+        // 9. 更新应用的 deployKey 和部署时间
         App updateApp = new App();
         updateApp.setDeployKey(deployKey);
         updateApp.setDeployedTime(LocalDateTime.now());
@@ -184,7 +200,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 检查更新是否成功
         ThrowUtils.throwIf(!updateResult, ErrorCode.SYSTEM_ERROR, "更新应用信息失败");
 
-        // 9. 返回可访问的 URL
+        // 10. 返回可访问的 URL
         return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
     }
 

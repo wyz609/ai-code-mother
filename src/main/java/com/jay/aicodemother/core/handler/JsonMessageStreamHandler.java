@@ -6,9 +6,12 @@ import cn.hutool.json.JSON;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.jay.aicodemother.ai.model.message.*;
+import com.jay.aicodemother.constant.AppConstant;
+import com.jay.aicodemother.core.builder.VueProjectBuilder;
 import com.jay.aicodemother.model.entity.User;
 import com.jay.aicodemother.model.enums.ChatHistoryMessageTypeEnum;
 import com.jay.aicodemother.service.ChatHistoryService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -30,7 +33,10 @@ import java.util.Set;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class JsonMessageStreamHandler {
+
+    private final VueProjectBuilder vueProjectBuilder;
 
     /**
      * 接收原始的JSON消息流
@@ -48,7 +54,7 @@ public class JsonMessageStreamHandler {
         // 用于收集数据生成后端记忆格式 以便在流式完成保存到对话历史
         StringBuilder chatHistoryStringBuilder = new StringBuilder();
         // 用于跟踪已经见过的工具 ID， 判断是否为第一次出现 避免重复显示工具调用信息
-        Set<Object> seenToolIds = new HashSet<>();
+        Set<String> seenToolIds = new HashSet<>();
         return originFlux.mapNotNull(chunk -> {
             // 解析每个 JSON 消息块
             return handleJsonMessageChunk(chunk, chatHistoryStringBuilder, seenToolIds);
@@ -58,6 +64,9 @@ public class JsonMessageStreamHandler {
                     // 流式响应完成后， 添加 AI 消息到对话历史
                     String aiResponse = chatHistoryStringBuilder.toString();
                     chatHistoryService.addChatMessage(appId, aiResponse, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
+                    // 异步构建 Vue 项目
+                    String projectPath = AppConstant.CODE_DEPLOY_ROOT_DIR + "/vue_project_" + appId;
+                    vueProjectBuilder.buildProjectAsync(projectPath);
                 })
                 .doOnError(error -> {
                     // 如果 AI 回复失败， 也需要记录错误信息
@@ -66,7 +75,7 @@ public class JsonMessageStreamHandler {
                 });
     }
 
-    private String handleJsonMessageChunk(String chunk, StringBuilder chatHistoryStringBuilder, Set<Object> seenToolIds) {
+    private String handleJsonMessageChunk(String chunk, StringBuilder chatHistoryStringBuilder, Set<String> seenToolIds) {
 
         StreamMessage streamMessage = JSONUtil.toBean(chunk, StreamMessage.class);
         StreamMessageTypeEnum type = StreamMessageTypeEnum.getEnumByValue(streamMessage.getType());
@@ -80,11 +89,12 @@ public class JsonMessageStreamHandler {
             }
             case TOOL_REQUEST -> {
                 ToolRequestMessage toolRequestMessage = JSONUtil.toBean(chunk, ToolRequestMessage.class);
-                Object toolId = toolRequestMessage.getId();
+                String toolId = toolRequestMessage.getId();
                 // 检查是否为第一次调用这个工具 ID
                 if(toolId != null && !seenToolIds.contains(toolId)){
                     // 是第一次调用该工具， 记录 ID 并完整的返回工具信息
                     seenToolIds.add(toolId);
+                    log.info("[选择工具] 工具调用：{}", toolId);
                     return "\n\n[选择工具] 写入文件\n\n";
                 }else{
                     log.info("[选择工具] 忽略重复工具调用：{}", toolId);
