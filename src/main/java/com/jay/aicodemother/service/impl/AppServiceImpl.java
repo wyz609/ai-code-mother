@@ -5,6 +5,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.jay.aicodemother.constant.AppConstant;
 import com.jay.aicodemother.core.AICodeGeneratorFacade;
 import com.jay.aicodemother.core.builder.VueProjectBuilder;
@@ -19,6 +20,7 @@ import com.jay.aicodemother.model.enums.CodeGenTypeEnum;
 import com.jay.aicodemother.model.vo.AppVO;
 import com.jay.aicodemother.model.vo.UserVO;
 import com.jay.aicodemother.service.ChatHistoryService;
+import com.jay.aicodemother.service.ScreenshotService;
 import com.jay.aicodemother.service.UserService;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
@@ -26,6 +28,7 @@ import com.jay.aicodemother.model.entity.App;
 import com.jay.aicodemother.mapper.AppMapper;
 import com.jay.aicodemother.service.AppService;
 import com.mybatisflex.core.paginate.Page;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,6 +41,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.mybatisflex.core.query.QueryMethods.column;
@@ -58,11 +64,21 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     private final ChatHistoryService historyService;
 
+    private final ScreenshotService screenshotService;
+
     // 流式处理执行器
     private final StreamHandlerExecutor handlerExecutor;
 
     // Vue 项目构建器
     private final VueProjectBuilder vueProjectBuilder;
+
+    // 创建一个线程池用于异步任务
+    private final ExecutorService executorService = Executors.newFixedThreadPool(
+            Runtime.getRuntime().availableProcessors(),
+            new ThreadFactoryBuilder()
+                    .setNameFormat("screenshot-generator-%d")
+                    .build()
+    );
 
     @Override
     public AppVO getAppVO(App app) {
@@ -201,7 +217,41 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         ThrowUtils.throwIf(!updateResult, ErrorCode.SYSTEM_ERROR, "更新应用信息失败");
 
         // 10. 返回可访问的 URL
-        return String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        String appDeployUrl = String.format("%s/%s/", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        // 11. 异步生成截图并更新应用封面
+        generateAppScreenshotAsync(appId, appDeployUrl);
+        return appDeployUrl;
+    }
+    @Override
+    public void generateAppScreenshotAsync(Long appId, String appDeployUrl) {
+        executorService.submit(() ->{
+            try{
+                String screenshotUrl = screenshotService.generateAndUploadScreenshot(appDeployUrl);
+                App updateApp = new App();
+                updateApp.setId(appId);
+                updateApp.setCover(screenshotUrl);
+                boolean updateResult = this.updateById(updateApp);
+                // 检查更新是否成功
+                ThrowUtils.throwIf(!updateResult, ErrorCode.SYSTEM_ERROR, "更新应用封面失败");
+            }catch (Exception e){
+                log.error("异步生成应用截图并更新封面时发生异常：{}",e.getMessage(),e);
+            }
+        });
+    }
+    /**
+     * 在组件销毁时关闭线程池
+     */
+    @PreDestroy
+    public void shutdown() {
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
 

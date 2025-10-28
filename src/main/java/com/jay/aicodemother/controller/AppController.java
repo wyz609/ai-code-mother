@@ -3,10 +3,12 @@ package com.jay.aicodemother.controller;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import com.jay.aicodemother.ai.AiCodeGenTypeRoutingService;
 import com.jay.aicodemother.annotation.AuthCheck;
 import com.jay.aicodemother.common.BaseResponse;
 import com.jay.aicodemother.common.DeleteRequest;
 import com.jay.aicodemother.common.ResultUtils;
+import com.jay.aicodemother.constant.AppConstant;
 import com.jay.aicodemother.constant.UserConstant;
 import com.jay.aicodemother.exception.BusinessException;
 import com.jay.aicodemother.exception.ErrorCode;
@@ -15,9 +17,11 @@ import com.jay.aicodemother.model.dto.app.*;
 import com.jay.aicodemother.model.entity.User;
 import com.jay.aicodemother.model.enums.CodeGenTypeEnum;
 import com.jay.aicodemother.model.vo.AppVO;
+import com.jay.aicodemother.service.ProjectDownloadService;
 import com.jay.aicodemother.service.UserService;
 import com.mybatisflex.core.paginate.Page;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -28,6 +32,7 @@ import com.jay.aicodemother.service.AppService;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.io.File;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -44,6 +49,8 @@ public class AppController {
 
     private final AppService appService;
     private final UserService userService;
+    private final ProjectDownloadService projectDownloadService;
+    private final AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService;
 
     // region 用户端接口
 
@@ -67,12 +74,13 @@ public class AppController {
         app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
         app.setUserId(loginUser.getId());
         app.setPriority(0); // 默认优先级为0
+        CodeGenTypeEnum selectedCodeGenType = aiCodeGenTypeRoutingService.routeCodeGenType(initPrompt);
         // 展示设置为多文件生成类型
-        app.setCodeGenType(CodeGenTypeEnum.VUE_PROJECT.getValue());
-        
+        app.setCodeGenType(selectedCodeGenType.getValue());
+        // 插入数据库
         boolean result = appService.save(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
-        
+        log.info("应用创建成功, ID:{}, 类型:{}", app.getId(), selectedCodeGenType.getValue());
         return ResultUtils.success(app.getId());
     }
 
@@ -167,6 +175,37 @@ public class AppController {
                                     .build()
                     ));
         }
+    }
+
+    /**
+     * 下载应用代码
+     * @param appId 应用ID
+     * @param response 响应
+     * @param request 请求
+     */
+    @GetMapping("/download/{appId}")
+    public void downloadAppCode(@PathVariable Long appId, HttpServletResponse response, HttpServletRequest request){
+        // 1. 基础校验
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用ID不能为空");
+        // 2. 查询应用信息
+        App app = appService.getById(appId);
+        ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
+        // 3. 权限校验， 只有应用创建者才能进行下载代码
+        User loginUser = userService.getLoginUser(request);
+        if(!app.getUserId().equals(loginUser.getId())){
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR,"无权限下载该应用代码");
+        }
+        // 4. 构建应用代码目录路径(生成目录， 非部署目录)
+        String codeGenType = app.getCodeGenType();
+        String sourceDirName = codeGenType + "_" + appId;
+        String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + sourceDirName;
+        // 5. 检查代码目录是否存在
+        File sourceDir = new File(sourceDirPath);
+        ThrowUtils.throwIf(!sourceDir.exists() || !sourceDir.isDirectory(), ErrorCode.NOT_FOUND_ERROR, "代码目录不存在,请先生成代码");
+        // 6. 生成下载文件名(不建议添加中文内容)
+        String downloadFileName = String.valueOf(appId);
+        // 7. 调用通用下载服务
+        projectDownloadService.downloadProjectAsZip(sourceDirPath, downloadFileName, response);
     }
 
 

@@ -40,10 +40,18 @@ knife4j:
 langchain4j:
   open-ai:
     streaming-chat-model:
-      api-key: ${OPENAI_API_KEY:your-api-key-here}
-      base-url: https://api.openai.com/v1
-      model-name: gpt-4o-mini
+      api-key: ${langchain4j.open-ai.streaming-chat-model.model-name}
+      base-url: ${langchain4j.open-ai.streaming-chat-model.base-url}
+      model-name: ${langchain4j.open-ai.streaming-chat-model.model-name}
     chat-model:
-      api-key: ${OPENAI_API_KEY:your-api-key-here}
-      base-url: https://api.openai.com/v1
-      model-name: gpt-4o-mini
+      api-key: ${langchain4j.open-ai.chat-model.api-key}
+      base-url: ${langchain4j.open-ai.chat-model.base-url}
+      model-name: ${langchain4j.open-ai.chat-model.model-name}
+
+cos:
+  client:
+    host: ${cos.client.host}
+    secretId: ${cos.client.secretId}
+    secretKey: ${cos.client.secretKey}
+    bucket: ${cos.client.bucket}
+    region: ${cos.client.region}

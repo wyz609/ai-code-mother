@@ -1,5 +1,16 @@
 package com.jay.aicodemother.constant;
 
+import cn.hutool.core.util.StrUtil;
+
+/**
+ * Class name: AppConstant
+ * Package: com.jay.aicodemother.constant
+ * Description:
+ *
+ * @Create: 2025/10/25 15:54
+ * @Author: jay
+ * @Version: 1.0
+ */
 public interface AppConstant {
 
     /**

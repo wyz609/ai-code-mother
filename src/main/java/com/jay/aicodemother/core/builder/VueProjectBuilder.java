@@ -60,6 +60,11 @@ public class VueProjectBuilder {
     }
 
 
+    /**
+     * 构建 Vue 项目
+     * @param projectPath
+     * @return
+     */
     public boolean builderProject(String projectPath){
         File projectDir = new File(projectPath);
         if(!projectDir.exists() || !projectDir.isDirectory()){
