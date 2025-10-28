@@ -222,6 +222,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         generateAppScreenshotAsync(appId, appDeployUrl);
         return appDeployUrl;
     }
+
+    /**
+     * 异步设置应用封面图片
+     * @param appId
+     * @param appDeployUrl
+     */
     @Override
     public void generateAppScreenshotAsync(Long appId, String appDeployUrl) {
         executorService.submit(() ->{
@@ -233,6 +239,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
                 boolean updateResult = this.updateById(updateApp);
                 // 检查更新是否成功
                 ThrowUtils.throwIf(!updateResult, ErrorCode.SYSTEM_ERROR, "更新应用封面失败");
+                log.info("异步生成应用封面完成，封面图片 URL ->{}", screenshotUrl);
             }catch (Exception e){
                 log.error("异步生成应用截图并更新封面时发生异常：{}",e.getMessage(),e);
             }

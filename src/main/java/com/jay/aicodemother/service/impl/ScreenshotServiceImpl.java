@@ -59,6 +59,10 @@ public class ScreenshotServiceImpl implements ScreenshotService {
      * @param localScreenshotPath 待清除文件的路径
      */
     private void cleanUpLocalFile(String localScreenshotPath) {
+        if (StrUtil.isBlank(localScreenshotPath)) {
+            return;
+        }
+        
         File file = new File(localScreenshotPath);
         if (file.exists()){
             FileUtil.del(file);
@@ -73,6 +77,7 @@ public class ScreenshotServiceImpl implements ScreenshotService {
      */
     private String uploadScreenshotToCos(String localScreenshotPath) {
         if(StrUtil.isBlank(localScreenshotPath)){
+            log.error("上传截图到COS失败：本地截图路径为空");
             return null;
         }
         File screenshotFile = new File(localScreenshotPath);
@@ -83,6 +88,7 @@ public class ScreenshotServiceImpl implements ScreenshotService {
         // 生成 COS 对象键
         String fileName = UUID.randomUUID().toString().substring(0, 8) + "_compress.jpg";
         String cosKey = generateScreenshotKey(fileName);
+        log.info("准备上传截图到COS，key: {}, file: {}", cosKey, localScreenshotPath);
         return cosManager.uploadFile(cosKey, screenshotFile);
     }
 
@@ -93,7 +99,10 @@ public class ScreenshotServiceImpl implements ScreenshotService {
      */
     private String generateScreenshotKey(String fileName) {
         String datePath = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy/MM/dd"));
-        return String.format("/screenshots/%s%s", datePath, fileName);
+        // 确保路径以/开头，不以/结尾
+        String key = String.format("screenshots/%s/%s", datePath, fileName);
+        log.debug("生成COS对象键: {}", key);
+        return key;
     }
 
 }

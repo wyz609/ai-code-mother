@@ -10,7 +10,7 @@
 
         <!-- 导航菜单 -->
         <a-menu
-          v-model:selectedKeys="selectedKeys"
+          :selectedKeys="selectedKeys"
           mode="horizontal"
           class="header-menu"
           :items="menuItems"
@@ -19,51 +19,141 @@
       </div>
 
       <!-- 右侧：用户信息 -->
-      <div class="header-right">
-        <a-button type="primary" @click="handleLogin"> 登录 </a-button>
+      <div class="user-login-status">
+        <div v-if="loginUserStore.loginUser.userName" class="user-info">
+          <a-dropdown placement="bottomRight" :trigger="['hover']">
+            <div class="user-avatar-section">
+              <a-space>
+                <a-avatar
+                  :src="loginUserStore.loginUser.userAvatar"
+                  :alt="loginUserStore.loginUser.userName || '无名'"
+                  class="user-avatar"
+                >
+                  {{ (loginUserStore.loginUser.userName || '无名').charAt(0) }}
+                </a-avatar>
+                <span class="user-name">{{ loginUserStore.loginUser.userName || '无名' }}</span>
+              </a-space>
+            </div>
+            <template #overlay>
+              <a-menu @click="handleUserMenuClick">
+                <a-menu-item key="profile">
+                  <UserOutlined /> 个人信息
+                </a-menu-item>
+                <a-menu-divider />
+                <a-menu-item key="logout">
+                  <LogoutOutlined /> 退出登录
+                </a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
+        </div>
+        <div v-else class="login-section">
+          <a-button type="primary" @click="handleLogin">登录</a-button>
+        </div>
       </div>
     </div>
   </a-layout-header>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, h } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { message } from 'ant-design-vue'
+import { UserOutlined, LogoutOutlined, HomeOutlined, AppstoreOutlined } from '@ant-design/icons-vue'
 import type { MenuProps } from 'ant-design-vue'
+// JS 中引入 Store
+import { useLoginUserStore } from '@/stores/loginUser.ts'
+const loginUserStore = useLoginUserStore()
+const route = useRoute()
 
 const router = useRouter()
-const selectedKeys = ref<string[]>(['home'])
 
-// 菜单配置
-const menuItems: MenuProps['items'] = [
+// 根据当前路由动态设置选中的菜单项
+const selectedKeys = computed(() => {
+  const path = route.path
+  // 直接返回当前路径作为选中的菜单项
+  if (path === '/' || path === '/admin/userManage' || path === '/admin/appManage') return [path]
+  if (path === '/about') return ['/about']
+  // 如果是登录或注册页面，不选中任何菜单项
+  if (path === '/user/login' || path === '/user/register') return []
+  // 检查是否是管理员页面
+  if (path.startsWith('/admin/')) return [path]
+  // 检查是否是应用相关页面，选中首页
+  if (path.startsWith('/app/')) return ['/']
+  return ['/'] // 默认选中首页
+})
+
+// 菜单配置项
+const originItems = [
   {
-    key: 'home',
-    label: '首页',
+    key: '/',
+    icon: () => h(HomeOutlined),
+    label: '主页',
+    title: '主页',
   },
   {
-    key: 'about',
-    label: '关于',
+    key: '/admin/userManage',
+    icon: () => h(UserOutlined),
+    label: '用户管理',
+    title: '用户管理',
   },
+  {
+    key: '/admin/appManage',
+    icon: () => h(AppstoreOutlined),
+    label: '应用管理',
+    title: '应用管理',
+  }
 ]
+
+// 过滤菜单项
+const filterMenus = (menus = [] as MenuProps['items']) => {
+  return menus?.filter((menu) => {
+    const menuKey = menu?.key as string
+    if (menuKey?.startsWith('/admin')) {
+      const loginUser = loginUserStore.loginUser
+      if (!loginUser || loginUser.userRole !== 'admin') {
+        return false
+      }
+    }
+    return true
+  })
+}
+
+// 展示在菜单的路由数组
+const menuItems = computed<MenuProps['items']>(() => filterMenus(originItems))
 
 // 菜单点击处理
 const handleMenuClick = ({ key }: { key: string }) => {
-  selectedKeys.value = [key]
-
+  console.log('菜单点击:', key)
   // 根据菜单项跳转路由
+  if (key && key !== route.path) {
+    router.push(key)
+  }
+}
+
+// 用户菜单点击处理
+const handleUserMenuClick = async ({ key }: { key: string }) => {
   switch (key) {
-    case 'home':
-      router.push('/')
+    case 'profile':
+      // TODO: 跳转到个人信息页面
+      message.info('个人信息功能开发中...')
       break
-    case 'about':
-      router.push('/about')
+    case 'logout':
+      const success = await loginUserStore.logout()
+      if (success) {
+        message.success('退出登录成功')
+        // 跳转到首页
+        router.push('/')
+      } else {
+        message.error('退出登录失败')
+      }
       break
   }
 }
 
 // 登录按钮点击处理
 const handleLogin = () => {
-  console.log('登录功能待实现')
+  router.push('/user/login')
 }
 </script>
 
@@ -122,7 +212,46 @@ const handleLogin = () => {
   background: transparent;
 }
 
-.header-right {
+.user-login-status {
+  display: flex;
+  align-items: center;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+}
+
+.user-avatar-section {
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.user-avatar-section:hover {
+  background-color: #f5f5f5;
+}
+
+.user-avatar {
+  transition: all 0.2s ease;
+}
+
+.user-avatar-section:hover .user-avatar {
+  transform: scale(1.05);
+}
+
+.user-name {
+  color: #333;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.user-avatar-section:hover .user-name {
+  color: #1890ff;
+}
+
+.login-section {
   display: flex;
   align-items: center;
 }

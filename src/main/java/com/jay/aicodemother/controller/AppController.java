@@ -262,7 +262,7 @@ public class AppController {
      * 根据 id 获取应用详情
      */
     @GetMapping("/get/vo")
-    public BaseResponse<AppVO> getAppById(long id, HttpServletRequest request) {
+    public BaseResponse<AppVO> getAppById(@RequestParam Long id, HttpServletRequest request) {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
         
         App app = appService.getById(id);
@@ -385,7 +385,7 @@ public class AppController {
      */
     @GetMapping("/admin/get/vo")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<AppVO> getAppByIdForAdmin(long id) {
+    public BaseResponse<AppVO> getAppByIdForAdmin(@RequestParam long id) {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
         
         App app = appService.getById(id);

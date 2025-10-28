@@ -4,6 +4,7 @@ import com.jay.aicodemother.config.CosClientConfig;
 import com.qcloud.cos.COSClient;
 import com.qcloud.cos.model.PutObjectRequest;
 import com.qcloud.cos.model.PutObjectResult;
+import com.qcloud.cos.exception.CosClientException;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -33,8 +34,39 @@ public class CosManager {
      * @return 上传结果
      */
     public PutObjectResult putObject(String key, File file) {
-        PutObjectRequest putObjectRequest = new PutObjectRequest(cosClientConfig.getBucket(), key, file);
-        return cosClient.putObject(putObjectRequest);
+        try {
+            // 验证参数
+            if (key == null || key.isEmpty()) {
+                log.error("COS上传失败：key不能为空");
+                return null;
+            }
+            
+            if (file == null || !file.exists()) {
+                log.error("COS上传失败：文件不存在，key: {}", key);
+                return null;
+            }
+            
+            // 确保key以/开头，但不以/结尾
+            if (!key.startsWith("/")) {
+                key = "/" + key;
+            }
+            
+            log.info("准备上传文件到COS: bucket={}, key={}, file={}", 
+                    cosClientConfig.getBucket(), key, file.getAbsolutePath());
+            
+            PutObjectRequest putObjectRequest = new PutObjectRequest(cosClientConfig.getBucket(), key, file);
+            PutObjectResult result = cosClient.putObject(putObjectRequest);
+            log.info("文件上传COS成功: bucket={}, key={}", cosClientConfig.getBucket(), key);
+            return result;
+        } catch (CosClientException e) {
+            log.error("COS上传失败：bucket={}, key={}, error={}", 
+                    cosClientConfig.getBucket(), key, e.getMessage(), e);
+            return null;
+        } catch (Exception e) {
+            log.error("COS上传发生未知错误：bucket={}, key={}, error={}", 
+                    cosClientConfig.getBucket(), key, e.getMessage(), e);
+            return null;
+        }
     }
 
     /**
@@ -48,12 +80,21 @@ public class CosManager {
         // 上传文件
         PutObjectResult result = putObject(key, file);
         if (result != null) {
-            // 构建访问URL
-            String url = String.format("%s%s", cosClientConfig.getHost(), key);
+            // 构建访问URL，确保host末尾没有/，key开头有/
+            String host = cosClientConfig.getHost();
+            if (host.endsWith("/")) {
+                host = host.substring(0, host.length() - 1);
+            }
+            
+            if (!key.startsWith("/")) {
+                key = "/" + key;
+            }
+            
+            String url = String.format("%s%s", host, key);
             log.info("文件上传COS成功: {} -> {}", file.getName(), url);
             return url;
         } else {
-            log.error("文件上传COS失败，返回结果为空");
+            log.error("文件上传COS失败，返回结果为空，key: {}, file: {}", key, file.getAbsolutePath());
             return null;
         }
     }
