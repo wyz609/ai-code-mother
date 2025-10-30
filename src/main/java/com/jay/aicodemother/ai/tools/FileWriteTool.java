@@ -1,5 +1,7 @@
 package com.jay.aicodemother.ai.tools;
 
+import cn.hutool.core.io.FileUtil;
+import cn.hutool.json.JSONObject;
 import com.jay.aicodemother.constant.AppConstant;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
@@ -20,81 +22,62 @@ import java.nio.file.StandardOpenOption;
  */
 @Slf4j
 @Component
-public class FileWriteTool {
-
-    // 项目目录前缀常量
-    private static final String PROJECT_DIR_PREFIX = "vue_project_";
-    
-    // 最大文件大小限制 (10MB)
-    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024;
+public class FileWriteTool extends BaseTool {
 
     @Tool("写入文件到指定路径")
     public String writeFile(
             @P("文件的相对路径")
-            String relativeFilePath,
+                    String relativeFilePath,
             @P("要写入文件的内容")
-            String content,
+                    String content,
             @ToolMemoryId Long appId
     ) {
         try {
-            // 参数验证
-            if (relativeFilePath == null || relativeFilePath.trim().isEmpty()) {
-                return "文件路径不能为空";
+            Path path = Paths.get(relativeFilePath);
+            if (!path.isAbsolute()) {
+                // 相对路径处理，创建基于 appId 的项目目录
+                String projectDirName = "vue_project_" + appId;
+                Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
+                path = projectRoot.resolve(relativeFilePath);
             }
-            
-            if (content == null) {
-                content = ""; // 允许写入空文件
-            }
-            
-            // 检查文件大小
-            if (content.getBytes(StandardCharsets.UTF_8).length > MAX_FILE_SIZE) {
-                return "文件内容过大，超过最大限制: " + MAX_FILE_SIZE + " 字节";
-            }
-            
-            // 规范化路径
-            Path path = Paths.get(relativeFilePath).normalize();
-            
-            // 安全检查：防止路径遍历攻击
-            if (path.isAbsolute() || relativeFilePath.contains("..")) {
-                return "不允许使用绝对路径或包含 .. 的路径";
-            }
-            
-            // 相对路径处理，创建基于 appId 的项目目录
-            String projectDirName = PROJECT_DIR_PREFIX + appId;
-            Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
-            path = projectRoot.resolve(path);
-            
-            // 再次规范化以防止路径遍历
-            path = path.normalize();
-            
-            // 确保文件在项目根目录内
-            if (!path.startsWith(projectRoot)) {
-                return "文件路径超出允许范围";
-            }
-            
             // 创建父目录（如果不存在）
             Path parentDir = path.getParent();
             if (parentDir != null) {
                 Files.createDirectories(parentDir);
             }
-            
             // 写入文件内容
-            Files.writeString(path, content,
+            Files.write(path, content.getBytes(),
                     StandardOpenOption.CREATE,
                     StandardOpenOption.TRUNCATE_EXISTING);
-            
-            log.info("成功写入文件: {}/{}", projectDirName, relativeFilePath);
-            
+            log.info("成功写入文件: {}", path.toAbsolutePath());
             // 注意要返回相对路径，不能让 AI 把文件绝对路径返回给用户
             return "文件写入成功: " + relativeFilePath;
         } catch (IOException e) {
             String errorMessage = "文件写入失败: " + relativeFilePath + ", 错误: " + e.getMessage();
             log.error(errorMessage, e);
             return errorMessage;
-        } catch (Exception e) {
-            String errorMessage = "文件写入发生未知错误: " + relativeFilePath + ", 错误: " + e.getMessage();
-            log.error(errorMessage, e);
-            return errorMessage;
         }
+    }
+    @Override
+    public String getToolName() {
+        return "writeFile";
+    }
+
+    @Override
+    public String getDisplayName() {
+        return "写入文件";
+    }
+
+    @Override
+    public String generateToolExecutedResult(JSONObject arguments) {
+        String relativeFilePath = arguments.getStr("relativeFilePath");
+        String suffix = FileUtil.getSuffix(relativeFilePath);
+        String content = arguments.getStr("content");
+        return String.format("""
+                        [工具调用] %s %s
+                        ```%s
+                        %s
+                        ```
+                        """, getDisplayName(), relativeFilePath, suffix, content);
     }
 }

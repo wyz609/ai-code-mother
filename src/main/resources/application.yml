@@ -47,6 +47,14 @@ langchain4j:
       api-key: ${langchain4j.open-ai.chat-model.api-key}
       base-url: ${langchain4j.open-ai.chat-model.base-url}
       model-name: ${langchain4j.open-ai.chat-model.model-name}
+    reasoning-streaming-chat-model:
+      api-key: ${langchain4j.open-ai.reasoning-streaming-chat-model.api-key}
+      base-url: ${langchain4j.open-ai.reasoning-streaming-chat-model.base-url}
+      model-name: ${langchain4j.open-ai.reasoning-streaming-chat-model.model-name}
+      max-tokens: ${langchain4j.open-ai.reasoning-streaming-chat-model.max-tokens}
+      temperature: ${langchain4j.open-ai.reasoning-streaming-chat-model.temperature}
+      log-requests: ${langchain4j.open-ai.chat-model.log-request}
+      log-responses: ${langchain4j.open-ai.chat-model.log-response}
 
 cos:
   client:

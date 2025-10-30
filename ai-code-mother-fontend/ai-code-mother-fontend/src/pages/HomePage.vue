@@ -59,7 +59,7 @@ const createApp = async () => {
     if (res.data.code === 0 && res.data.data) {
       message.success('应用创建成功')
       // 跳转到对话页面
-      const appId = String(res.data.data)
+      const appId = res.data.data
       await router.push(`/app/chat/${appId}`)
     } else {
       message.error('创建失败：' + res.data.message)
@@ -115,9 +115,9 @@ const loadFeaturedApps = async () => {
 }
 
 // 查看对话
-const viewChat = (appId: string | number | undefined) => {
+const viewChat = (appId?: string | number) => {
   if (appId) {
-    router.push(`/app/chat/${appId}`)
+    router.push(`/app/chat/${String(appId)}`)
   }
 }
 
@@ -273,30 +273,37 @@ onMounted(() => {
   overflow-x: hidden;
 }
 
-/* 简洁的网格背景 */
+/* 简洁高性能的网格背景 */
 #homePage::before {
   content: '';
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
   background-size: 50px 50px;
   pointer-events: none;
   z-index: 1;
 }
 
-/* 微妙的光晕装饰 */
+/* 微妙的中心光晕效果 */
 #homePage::after {
   content: '';
-  position: absolute;
+  position: fixed;
   top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(
+    circle,
+    rgba(96, 165, 250, 0.08) 0%,
+    rgba(96, 165, 250, 0.04) 25%,
+    transparent 70%
+  );
   pointer-events: none;
   z-index: 1;
 }
@@ -326,7 +333,6 @@ onMounted(() => {
   line-height: 1.1;
   color: #ffffff;
   letter-spacing: -1.5px;
-  animation: fadeInUp 0.6s ease-out;
 }
 
 .hero-description {
@@ -335,39 +341,28 @@ onMounted(() => {
   color: rgba(255, 255, 255, 0.6);
   font-weight: 400;
   letter-spacing: 0.3px;
-  animation: fadeInUp 0.6s ease-out 0.1s both;
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 输入区域 */
+/* 输入区域 - 性能优化 */
 .input-section {
   position: relative;
   margin: 0 auto 50px;
   max-width: 720px;
-  animation: fadeInUp 0.6s ease-out 0.2s both;
 }
 
 .prompt-input {
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   font-size: 16px;
   padding: 18px 60px 18px 18px;
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
-  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(8px);
   width: 100%;
   color: #ffffff;
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
 }
 
 .prompt-input::placeholder {
@@ -375,10 +370,12 @@ onMounted(() => {
 }
 
 .prompt-input:focus {
-  border-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(96, 165, 250, 0.4);
   background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(255, 255, 255, 0.05);
   outline: none;
+  box-shadow: 
+    0 8px 24px rgba(96, 165, 250, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .input-actions {
@@ -391,7 +388,7 @@ onMounted(() => {
 }
 
 .input-actions .ant-btn {
-  background: #ffffff;
+  background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
   border: none;
   border-radius: 10px;
   height: 42px;
@@ -400,65 +397,69 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  transition: all 0.2s ease;
   color: #0a0a0a;
   font-size: 18px;
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
 }
 
 .input-actions .ant-btn:hover {
-  background: rgba(255, 255, 255, 0.9);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
+  box-shadow: 0 6px 16px rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
 }
 
-/* 快捷按钮 */
+/* 快捷按钮 - 性能优化 */
 .quick-actions {
   display: flex;
   gap: 12px;
   justify-content: center;
   margin-bottom: 60px;
   flex-wrap: wrap;
-  animation: fadeInUp 0.6s ease-out 0.3s both;
 }
 
 .quick-actions .ant-btn {
   border-radius: 10px;
   padding: 10px 20px;
   height: auto;
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.8);
   font-size: 14px;
   font-weight: 500;
   transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .quick-actions .ant-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(96, 165, 250, 0.4);
   color: #ffffff;
+  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.2);
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
-/* 区域容器 */
+/* 区域容器 - 玻璃拟态效果 */
 .section {
   margin-bottom: 60px;
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
   border-radius: 16px;
   padding: 36px 32px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 /* 我的作品区域特殊样式 */
 .my-works-section {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .section-title {
@@ -571,22 +572,22 @@ onMounted(() => {
   color: #ffffff;
 }
 
-/* 卡片悬浮效果 */
+/* 卡片样式 - 玻璃拟态效果 */
 :deep(.app-card) {
-  transition: all 0.3s ease;
   border-radius: 12px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
 }
 
 :deep(.app-card:hover) {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
   transform: translateY(-4px);
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  background: rgba(255, 255, 255, 0.06);
 }
 
 /* 响应式设计 */

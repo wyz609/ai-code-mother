@@ -66,6 +66,7 @@ public class VueProjectBuilder {
      * @return
      */
     public boolean builderProject(String projectPath){
+        log.info("开始构建 Vue 项目: {}", projectPath);
         File projectDir = new File(projectPath);
         if(!projectDir.exists() || !projectDir.isDirectory()){
             log.error("项目目录不存在或者不是目录: {}", projectPath);
@@ -105,14 +106,14 @@ public class VueProjectBuilder {
     // 执行 npm install 命令
     private boolean executeNpmInstall(File projectDir){
         log.info("执行 npm install....");
-        String command = String.format("%s install", buildCommand("npm"));
+        String command = String.format("%s install", buildCommand());
         return executeCommand(projectDir, command, 300); // 设置五分钟超时时间
     }
 
     // 执行 npm run build 命令
     private boolean executeNpmBuild(File projectDir){
         log.info("执行 npm build....");
-        String command = String.format("%s run build", buildCommand("npm"));
+        String command = String.format("%s run build", buildCommand());
         return executeCommand(projectDir, command, 180); // 3 分钟超时
     }
 
@@ -121,8 +122,8 @@ public class VueProjectBuilder {
         return System.getProperty("os.name").toLowerCase().contains("windows");
     }
 
-    private String buildCommand(String baseCommand){
-        return isWindows() ? baseCommand + ".cmd" : baseCommand;
+    private String buildCommand(){
+        return isWindows() ? "npm" + ".cmd" : "npm";
     }
 
     /**

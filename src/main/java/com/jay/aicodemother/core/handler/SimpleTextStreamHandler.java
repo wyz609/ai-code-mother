@@ -24,7 +24,7 @@ public class SimpleTextStreamHandler {
 
     /**
      * 处理传统流式响应 (HTML 和 MULTI_FILE)
-     * 直接手机完整的文本响应
+     * 直接收集完整的文本响应
      * @param originFlux 原始流
      * @param chatHistoryService 对话历史服务
      * @param appId 应用ID
@@ -33,26 +33,44 @@ public class SimpleTextStreamHandler {
      */
     public Flux<String> handle(Flux<String> originFlux, ChatHistoryService chatHistoryService,
                                long appId, User loginUser){
-        StringBuilder aiResponseBuilder = new StringBuilder();
-        return originFlux.map(chunk -> {
-                    // 收集 AI 响应内容
-                    aiResponseBuilder.append(chunk);
-                    return chunk;
-                })
-                .doOnComplete(() -> {
-                    // 添加 AI 响应内容到对话历史
-                    String aiResponse = aiResponseBuilder.toString();
-                    if (StrUtil.isNotBlank(aiResponse)) {
-                        chatHistoryService.addChatMessage(appId, aiResponse,
-                                ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
-                    }
-                })
-                .doOnError(throwable -> {
-                    // 添加错误信息到对话历史
-                    String errorMessage = "AI 回复失败" + throwable.getMessage();
-                    chatHistoryService.addChatMessage(appId, errorMessage,
-                            ChatHistoryMessageTypeEnum.ERROR.getValue(), loginUser.getId());
-                });
+        StreamCollector collector = new StreamCollector(chatHistoryService, appId, loginUser);
+        return originFlux.doOnNext(collector::collect)
+                .doOnComplete(collector::onComplete)
+                .doOnError(collector::onError);
+    }
+
+    private static class StreamCollector {
+        private final StringBuilder aiResponseBuilder = new StringBuilder();
+        private final ChatHistoryService chatHistoryService;
+        private final long appId;
+        private final User loginUser;
+
+        public StreamCollector(ChatHistoryService chatHistoryService, long appId, User loginUser) {
+            this.chatHistoryService = chatHistoryService;
+            this.appId = appId;
+            this.loginUser = loginUser;
+        }
+
+        public void collect(String chunk) {
+            // 收集 AI 响应内容
+            aiResponseBuilder.append(chunk);
+        }
+
+        public void onComplete() {
+            // 添加 AI 响应内容到对话历史
+            String aiResponse = aiResponseBuilder.toString();
+            if (StrUtil.isNotBlank(aiResponse)) {
+                chatHistoryService.addChatMessage(appId, aiResponse,
+                        ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
+            }
+        }
+
+        public void onError(Throwable throwable) {
+            // 添加错误信息到对话历史
+            String errorMessage = "AI 回复失败" + throwable.getMessage();
+            chatHistoryService.addChatMessage(appId, errorMessage,
+                    ChatHistoryMessageTypeEnum.ERROR.getValue(), loginUser.getId());
+        }
     }
 
 }

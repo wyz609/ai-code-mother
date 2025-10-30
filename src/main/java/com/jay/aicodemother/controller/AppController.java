@@ -263,6 +263,7 @@ public class AppController {
      */
     @GetMapping("/get/vo")
     public BaseResponse<AppVO> getAppById(@RequestParam Long id, HttpServletRequest request) {
+        log.info("AppId: {}", id);
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
         
         App app = appService.getById(id);

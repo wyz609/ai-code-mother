@@ -37,15 +37,28 @@ public class ChatHistory implements Serializable {
     private Long id;
 
     /**
-     * 消息
+     * 消息内容
      */
+//    @Column("content")
     private String message;
 
     /**
-     * user/ai
+     * user/ai/error
      */
     @Column("messageType")
     private String messageType;
+
+//    /**
+//     * 错误信息（仅在消息类型为error时有值）
+//     */
+//    @Column("errorMessage")
+//    private String errorMessage;
+//
+//    /**
+//     * 消息序号（同一应用内按时间递增）
+//     */
+//    @Column("messageOrder")
+//    private Integer messageOrder;
 
     /**
      * 应用id

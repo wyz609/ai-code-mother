@@ -80,11 +80,12 @@ public class WebScreenshotUtils {
             log.info("图片压缩成功：{}", compressedImagePath);
             // 删除原始图片
             FileUtil.del(imageSavePath);
-            removeDriver(); // 释放资源
             return compressedImagePath;
         } catch (Exception e) {
             e.printStackTrace();
             return null;
+        } finally {
+            removeDriver(); // 确保总是释放资源
         }
     }
 

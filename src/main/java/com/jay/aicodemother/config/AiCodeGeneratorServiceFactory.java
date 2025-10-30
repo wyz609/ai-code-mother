@@ -20,6 +20,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.jay.aicodemother.ai.AiCodeGeneratorService;
 import com.jay.aicodemother.ai.tools.FileWriteTool;
+import com.jay.aicodemother.ai.tools.ToolManage;
 import com.jay.aicodemother.exception.BusinessException;
 import com.jay.aicodemother.exception.ErrorCode;
 import com.jay.aicodemother.model.enums.CodeGenTypeEnum;
@@ -62,6 +63,9 @@ public class AiCodeGeneratorServiceFactory {
 
     @Resource
     private ChatHistoryService chatHistoryService;
+
+    @Resource
+    private ToolManage toolManage;
     /**
      * AI 服务实例缓存
      *  缓存策略
@@ -127,7 +131,7 @@ public class AiCodeGeneratorServiceFactory {
                             .chatModel(chatModel) // 默认模型
                             .streamingChatModel(reasoningStreamingChatModel)
                             .chatMemoryProvider(memory -> chatMemory)
-                            .tools(new FileWriteTool())
+                            .tools((Object) toolManage.getTools())
                             .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(toolExecutionRequest,"Error: this is not tool called"
                                     + toolExecutionRequest.name())) // 幻觉工具名称策略， 配置了不同的工具时的处理策略， 让框架帮我们处理 AI 出现幻觉的情况， 否则调用对话方法可能会报错
                             .build();

@@ -57,6 +57,8 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
                 .message(message)
                 .messageType(messageType)
                 .userId(userId)
+//                // 初始化消息序号为0，实际使用时应该根据已有消息数量+1
+//                .messageOrder(0)
                 .build();
         return this.save(chatHistory);
     }
@@ -155,7 +157,7 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         String sortOrder = chatHistoryQueryRequest.getSortOrder();
         // 拼接查询条件
         queryWrapper.eq("id", id)
-                .like("message", message)
+                .like("content", message) // 修改为正确的字段名
                 .eq("messageType", messageType)
                 .eq("appId", appId)
                 .eq("userId", userId);
