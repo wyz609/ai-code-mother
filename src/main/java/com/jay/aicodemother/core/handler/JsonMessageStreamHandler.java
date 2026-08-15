@@ -78,7 +78,12 @@ public class JsonMessageStreamHandler {
                     }
                     // 异步构建 Vue 项目
                     String projectPath = AppConstant.CODE_OUTPUT_ROOT_DIR + System.getProperty("file.separator") + "vue_project_" + appId;
-                    vueProjectBuilder.buildProjectAsync(projectPath);
+                    File projectDir = new File(projectPath);
+                    if (projectDir.isDirectory() && new File(projectDir, "package.json").exists()) {
+                        vueProjectBuilder.buildProjectAsync(projectPath);
+                    } else {
+                        log.warn("Vue 项目文件尚未生成完整，跳过构建，appId: {}, 目录: {}", appId, projectPath);
+                    }
                 })
                 .doOnError(error -> {
                     // 如果 AI 回复失败， 也需要记录错误信息

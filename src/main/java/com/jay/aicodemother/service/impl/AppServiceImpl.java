@@ -20,6 +20,7 @@ import com.jay.aicodemother.model.enums.CodeGenTypeEnum;
 import com.jay.aicodemother.model.vo.AppVO;
 import com.jay.aicodemother.model.vo.UserVO;
 import com.jay.aicodemother.service.ChatHistoryService;
+import com.jay.aicodemother.service.PreviewTokenService;
 import com.jay.aicodemother.service.ScreenshotService;
 import com.jay.aicodemother.service.UserService;
 import com.mybatisflex.core.query.QueryWrapper;
@@ -32,9 +33,12 @@ import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import reactor.core.publisher.Flux;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -66,19 +70,53 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     private final ScreenshotService screenshotService;
 
+    private final PreviewTokenService previewTokenService;
+
     // 流式处理执行器
     private final StreamHandlerExecutor handlerExecutor;
 
     // Vue 项目构建器
     private final VueProjectBuilder vueProjectBuilder;
 
-    // 创建一个线程池用于异步任务
-    private final ExecutorService executorService = Executors.newFixedThreadPool(
-            Runtime.getRuntime().availableProcessors(),
+    @Value("${server.port:8123}")
+    private int serverPort;
+
+    @Value("${server.servlet.context-path:}")
+    private String serverContextPath;
+
+    /**
+     * 截图生成线程池
+     * 核心线程数：2（截图任务不频繁，不需要太多线程）
+     * 最大线程数：4
+     * 使用守护线程，避免阻止 JVM 关闭
+     */
+    private final ExecutorService screenshotExecutor = Executors.newFixedThreadPool(
+            2,
             new ThreadFactoryBuilder()
                     .setNameFormat("screenshot-generator-%d")
+                    .setDaemon(true)  // 使用守护线程
                     .build()
     );
+
+    /**
+     * 在 Bean 销毁时关闭线程池
+     */
+    @PreDestroy
+    public void destroy() {
+        log.info("开始关闭截图生成线程池...");
+        screenshotExecutor.shutdown();
+        try {
+            if (!screenshotExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+                log.warn("截图线程池未能在 30 秒内正常关闭，强制终止...");
+                screenshotExecutor.shutdownNow();
+            }
+            log.info("截图生成线程池已关闭");
+        } catch (InterruptedException e) {
+            log.warn("等待截图线程池关闭时被中断，强制终止...");
+            screenshotExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
 
     @Override
     public AppVO getAppVO(App app) {
@@ -138,10 +176,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         //5. 通过校验后， 添加用户消息到对话历史
         historyService.addChatMessage(appId, message, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
 
+        long generationStartedAt = System.currentTimeMillis();
         // 6. 调用 AI 生成代码
         Flux<String> contentFlux = aiCodeGeneratorFacade.generateAndSaveCodeStream(message, codeGenTypeEnum, appId);
         // 7. 使用流式处理器执行器进行处理流式响应结果
-        return handlerExecutor.doExecute(contentFlux, historyService, appId, loginUser, codeGenTypeEnum);
+        return handlerExecutor.doExecute(contentFlux, historyService, appId, loginUser, codeGenTypeEnum)
+                .doOnComplete(() -> generateGeneratedAppScreenshotAsync(appId, codeGenTypeEnum, generationStartedAt));
 
     }
 
@@ -225,41 +265,79 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     /**
      * 异步设置应用封面图片
-     * @param appId
-     * @param appDeployUrl
+     * @param appId 应用ID
+     * @param appDeployUrl 应用部署URL
      */
     @Override
     public void generateAppScreenshotAsync(Long appId, String appDeployUrl) {
-        executorService.submit(() ->{
+        screenshotExecutor.submit(() ->{
             try{
-                String screenshotUrl = screenshotService.generateAndUploadScreenshot(appDeployUrl);
-                App updateApp = new App();
-                updateApp.setId(appId);
-                updateApp.setCover(screenshotUrl);
-                boolean updateResult = this.updateById(updateApp);
-                // 检查更新是否成功
-                ThrowUtils.throwIf(!updateResult, ErrorCode.SYSTEM_ERROR, "更新应用封面失败");
-                log.info("异步生成应用封面完成，封面图片 URL ->{}", screenshotUrl);
+                generateAndPersistAppCover(appId, appDeployUrl);
             }catch (Exception e){
-                log.error("异步生成应用截图并更新封面时发生异常：{}",e.getMessage(),e);
+                log.error("异步生成应用截图并更新封面时发生异常：{}", e.getMessage(), e);
             }
         });
     }
+
     /**
-     * 在组件销毁时关闭线程池
+     * Code generation does not require deployment. Capture the authenticated local preview so the
+     * work card immediately reflects the latest generated result.
      */
-    @PreDestroy
-    public void shutdown() {
-        executorService.shutdown();
-        try {
-            if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
-                executorService.shutdownNow();
+    private void generateGeneratedAppScreenshotAsync(Long appId, CodeGenTypeEnum codeGenType, long generationStartedAt) {
+        String token = previewTokenService.createToken(appId);
+        String contextPath = StrUtil.emptyToDefault(serverContextPath, "");
+        String previewUrl = String.format("http://127.0.0.1:%d%s/app/preview/%d/%s/",
+                serverPort, contextPath, appId, token);
+        screenshotExecutor.submit(() -> {
+            try {
+                if (!waitForPreviewReady(appId, codeGenType, generationStartedAt)) {
+                    log.warn("生成项目预览未在规定时间内就绪，跳过截图，appId: {}", appId);
+                    return;
+                }
+                generateAndPersistAppCover(appId, previewUrl);
+            } catch (Exception e) {
+                log.error("生成项目截图并更新封面时发生异常，appId: {}", appId, e);
             }
-        } catch (InterruptedException e) {
-            executorService.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
+        });
     }
+
+    private boolean waitForPreviewReady(Long appId, CodeGenTypeEnum codeGenType, long generationStartedAt) {
+        Path projectRoot = Path.of(AppConstant.CODE_OUTPUT_ROOT_DIR, codeGenType.getValue() + "_" + appId);
+        Path entryFile = codeGenType == CodeGenTypeEnum.VUE_PROJECT
+                ? projectRoot.resolve("dist").resolve("index.html")
+                : projectRoot.resolve("index.html");
+        long deadline = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(5);
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                if (Files.isRegularFile(entryFile)
+                        && (codeGenType != CodeGenTypeEnum.VUE_PROJECT
+                        || Files.getLastModifiedTime(entryFile).toMillis() >= generationStartedAt)) {
+                    return true;
+                }
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            } catch (Exception e) {
+                log.warn("检查项目预览状态失败，appId: {}, 文件: {}", appId, entryFile, e);
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private void generateAndPersistAppCover(Long appId, String webUrl) {
+        String screenshotUrl = screenshotService.generateAndUploadScreenshot(webUrl);
+        ThrowUtils.throwIf(StrUtil.isBlank(screenshotUrl), ErrorCode.OPERATION_ERROR, "生成截图失败");
+        App updateApp = new App();
+        updateApp.setId(appId);
+        updateApp.setCover(screenshotUrl);
+        boolean updateResult = this.updateById(updateApp);
+        ThrowUtils.throwIf(!updateResult, ErrorCode.SYSTEM_ERROR, "更新应用封面失败");
+        log.info("异步生成应用封面完成，appId: {}, 封面图片 URL -> {}", appId, screenshotUrl);
+    }
+
+    // 移除原来的 shutdown 方法，由 @PreDestroy destroy() 替代
 
 
     @Override

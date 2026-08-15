@@ -12,6 +12,8 @@ package com.jay.aicodemother.config;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,6 +21,7 @@ import org.springframework.context.annotation.Configuration;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 
+@Slf4j
 @Configuration
 @ConfigurationProperties(prefix = "langchain4j.open-ai.reasoning-streaming-chat-model")
 @Data
@@ -40,16 +43,12 @@ public class ReasoningStreamingChatModelConfig {
 
     /**
      * 推理流式模型
+     * 注意：代理通过 LangChain4jProxyConfig 配置 JVM 系统属性
      * @return
      */
     @Bean
     public StreamingChatModel reasoningStreamingChatModel(){
-        // 按理来说工程化项目应该使用推理模型来生成代码，但是这里为了演示，使用 简单模型
-//        final String modelName = "deepseek-chat";
-//        final int maxTokens = 8192;
-        // 生产环境使用
-//         final String modelName = "deepseek-reasoner";
-//         final int maxTokens = 327688;
+        log.info("初始化推理流式模型，baseUrl: {}, modelName: {}", baseUrl, modelName);
 
         return OpenAiStreamingChatModel.builder()
                 .apiKey(apiKey)
@@ -59,7 +58,7 @@ public class ReasoningStreamingChatModelConfig {
                 .baseUrl(baseUrl)
                 .logRequests(logRequests)
                 .logResponses(logResponses)
-                .timeout(Duration.of(20, ChronoUnit.SECONDS))
+                .timeout(Duration.of(120, ChronoUnit.SECONDS)) // 增加超时时间到 120 秒
                 .build();
     }
 }

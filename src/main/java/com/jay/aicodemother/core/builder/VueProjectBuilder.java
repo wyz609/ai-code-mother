@@ -2,6 +2,7 @@ package com.jay.aicodemother.core.builder;
 
 import cn.hutool.core.util.RuntimeUtil;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +16,9 @@ import java.util.concurrent.TimeUnit;
  * Package: com.jay.aicodemother.core.builder
  * Description: 该类用来执行 Vue 项目的构建过程
  *
+ * 注意：该类使用单例模式管理线程池，确保整个应用共享一个线程池，
+ * 避免创建多个线程池导致资源浪费。
+ *
  * @Create: 2025/10/27 11:41
  * @Author: jay
  * @Version: 1.0
@@ -23,16 +27,47 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class VueProjectBuilder {
 
-    // 创建一个线程池用于异步任务
+    /**
+     * 构建任务线程池
+     * 核心线程数：CPU 核心数，最大不超过 4
+     * 使用守护线程，避免阻止 JVM 关闭
+     */
     private final ExecutorService executor = Executors.newFixedThreadPool(
-            Runtime.getRuntime().availableProcessors(),
+            Math.min(Runtime.getRuntime().availableProcessors(), 4),
             new ThreadFactoryBuilder()
                     .setNameFormat("vue-builder-%d")
+                    .setDaemon(true)  // 使用守护线程，JVM 关闭时自动结束
                     .build()
     );
 
     /**
-     * 异步构建项目(不阻主线程)
+     * 在 Bean 销毁时关闭线程池
+     * Spring 容器会自动调用此方法
+     */
+    @PreDestroy
+    public void destroy() {
+        log.info("开始关闭 Vue 项目构建线程池...");
+        executor.shutdown();
+        try {
+            // 等待正在执行的任务完成，最多等待 30 秒
+            if (!executor.awaitTermination(30, TimeUnit.SECONDS)) {
+                log.warn("线程池未能在 30 秒内正常关闭，强制终止...");
+                executor.shutdownNow();
+                // 再等待 10 秒让线程响应中断
+                if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                    log.error("线程池强制终止后仍有任务未结束");
+                }
+            }
+            log.info("Vue 项目构建线程池已关闭");
+        } catch (InterruptedException e) {
+            log.warn("等待线程池关闭时被中断，强制终止...");
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * 异步构建项目(不阻塞主线程)
      * @param projectPath 项目路径
      */
     public void buildProjectAsync(String projectPath){
@@ -41,24 +76,10 @@ public class VueProjectBuilder {
             try{
                 builderProject(projectPath);
             }catch (Exception e){
-                log.error("异步构建 Vue 项目时发生异常: {}", e.getMessage(),e);
+                log.error("异步构建 Vue 项目时发生异常: {}", e.getMessage(), e);
             }
         });
     }
-
-    public void shutdown(){
-        executor.shutdown();
-        try{
-            if(!executor.awaitTermination(60, TimeUnit.SECONDS)){
-                executor.shutdownNow();
-            }
-        }catch (InterruptedException e){
-            executor.shutdownNow();
-            Thread.currentThread().interrupt();
-            log.error("等待线程池关闭时发生异常: {}", e.getMessage(),e);
-        }
-    }
-
 
     /**
      * 构建 Vue 项目

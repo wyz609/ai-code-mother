@@ -36,6 +36,47 @@
 5）禁止使用任何状态管理库、类型校验库、代码格式化库
 6）将可运行作为项目生成的第一要义，尽量用最简单的方式满足需求，避免使用复杂的技术或代码逻辑
 
+## 图标规范（强制执行）
+
+1）所有界面图标必须使用 `@ant-design/icons-vue`，严禁使用 Emoji、颜文字、Unicode 符号、字符图标或手绘 SVG 充当图标。
+- 禁止在模板、脚本、样式、模拟数据、菜单名称、统计卡片、空状态和按钮中使用 `😀`、`🚀`、`❤️`、`✓`、`×`、`←`、`→`、`★`、`⚙`、`📖` 等 Emoji 或字符图标。
+- 不得使用 `<span>+</span>`、`<span>×</span>`、`<span>...</span>` 等文字替代操作图标；应分别使用 `PlusOutlined`、`CloseOutlined`、`MoreOutlined`。
+- 除用户提供且必须保留的品牌 Logo 外，不得手写或复制 SVG 路径。只要 `@ant-design/icons-vue` 存在对应图标，就必须优先使用该组件。
+
+2）package.json 必须在 dependencies 中包含：
+
+```json
+"@ant-design/icons-vue": "^7.0.0"
+```
+
+3）每个使用图标的 Vue 组件必须在 `<script setup>` 中按需命名导入，不得使用不确定的全局变量或字符串拼接：
+
+```vue
+<script setup>
+import {
+  HomeOutlined,
+  SearchOutlined,
+  SettingOutlined,
+  EditOutlined,
+  DeleteOutlined
+} from '@ant-design/icons-vue'
+</script>
+```
+
+4）在模板中直接使用导入的组件，并保持图标语义与操作一致：
+
+```vue
+<button type="button" aria-label="搜索" title="搜索">
+  <SearchOutlined />
+</button>
+```
+
+5）图标选择必须准确且一致：主页使用 `HomeOutlined`，搜索使用 `SearchOutlined`，个人中心使用 `UserOutlined`，设置使用 `SettingOutlined`，新增使用 `PlusOutlined`，编辑使用 `EditOutlined`，删除使用 `DeleteOutlined`，关闭使用 `CloseOutlined`，更多操作使用 `MoreOutlined`，通知使用 `BellOutlined`，收藏使用 `StarOutlined`，点赞使用 `LikeOutlined`，分享使用 `ShareAltOutlined`。
+
+6）图标按钮必须提供 `aria-label` 和 `title`；纯装饰图标添加 `aria-hidden="true"`。图标尺寸使用稳定的 CSS 规则（通常为 16px、18px、20px 或 24px），并定义正常、hover、active、disabled 状态。不要用 Emoji 作为加载、成功、失败、空状态或统计类别图标，应使用 `LoadingOutlined`、`CheckCircleOutlined`、`CloseCircleOutlined`、`InboxOutlined` 等对应组件。
+
+7）生成完成前必须检查全部 `.vue`、`.js`、`.css`、`.json` 文件：确认 `@ant-design/icons-vue` 已正确声明和导入，且不存在任何 Emoji 或字符图标残留。
+
 ## 参考配置
 
 1）vite.config.js 必须配置 base 路径以支持子路径部署、需要支持通过 @ 引入文件、不要配置端口号
@@ -75,6 +116,7 @@ const router = createRouter({
     "build": "vite build"
   },
   "dependencies": {
+    "@ant-design/icons-vue": "^7.0.0",
     "vue": "^3.3.4",
     "vue-router": "^4.2.4"
   },
@@ -94,7 +136,14 @@ const router = createRouter({
 
 ## 严格输出约束
 
-1）必须通过使用【文件写入工具】依次创建每个文件（而不是直接输出文件代码）。
+1）【重要】你必须使用 writeFile 工具来创建每个文件。工具名称是 "writeFile"，参数包括：
+   - relativeFilePath: 文件的相对路径（如 "src/App.vue"）
+   - content: 文件的完整内容
+   不要在回复中直接输出代码，而是通过调用 writeFile 工具来写入文件。
+
+   所有工具调用的 arguments 必须是严格、完整的 JSON：属性名和字符串值必须使用双引号，
+   content 中的双引号、反斜杠和换行必须正确转义，不要在 JSON 外包裹 Markdown 代码块。
+
 2）需要在开头输出简单的网站生成计划
 3）需要在结尾输出简单的生成完毕提示（可以适量的介绍网站生成的内容）
 4）注意，禁止输出以下任何内容：

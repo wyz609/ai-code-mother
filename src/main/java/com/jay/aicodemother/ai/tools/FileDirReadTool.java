@@ -1,18 +1,21 @@
 package com.jay.aicodemother.ai.tools;
 
-import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
-import com.jay.aicodemother.constant.AppConstant;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
@@ -23,6 +26,8 @@ import java.util.Set;
 @Slf4j
 @Component
 public class FileDirReadTool extends BaseTool{
+
+    private static final int MAX_ENTRIES = 500;
 
     /**
      * 需要忽略的文件和目录
@@ -45,52 +50,64 @@ public class FileDirReadTool extends BaseTool{
             String relativeDirPath,
             @ToolMemoryId Long appId
     ) {
+        String safeRelativeDirPath = StrUtil.isBlank(relativeDirPath) ? "." : relativeDirPath.trim();
         try {
-            Path path = Paths.get(relativeDirPath == null ? "" : relativeDirPath);
-            if (!path.isAbsolute()) {
-                String projectDirName = "vue_project_" + appId;
-                Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
-                path = projectRoot.resolve(relativeDirPath == null ? "" : relativeDirPath);
+            Path path = resolveProjectPath(appId, safeRelativeDirPath);
+            if (!Files.isDirectory(path)) {
+                return "错误：目录不存在或不是目录 - " + safeRelativeDirPath;
             }
-            File targetDir = path.toFile();
-            if (!targetDir.exists() || !targetDir.isDirectory()) {
-                return "错误：目录不存在或不是目录 - " + relativeDirPath;
-            }
+            List<DirectoryEntry> entries = collectEntries(path);
             StringBuilder structure = new StringBuilder();
             structure.append("项目目录结构:\n");
-            // 使用 Hutool 递归获取所有文件
-            List<File> allFiles = FileUtil.loopFiles(targetDir, file -> !shouldIgnore(file.getName()));
-            // 按路径深度和名称排序显示
-            allFiles.stream()
-                    .sorted((f1, f2) -> {
-                        int depth1 = getRelativeDepth(targetDir, f1);
-                        int depth2 = getRelativeDepth(targetDir, f2);
-                        if (depth1 != depth2) {
-                            return Integer.compare(depth1, depth2);
+            entries.stream()
+                    .sorted(Comparator.comparing(entry -> entry.relativePath().toString()))
+                    .limit(MAX_ENTRIES)
+                    .forEach(entry -> {
+                        int depth = Math.max(0, entry.relativePath().getNameCount() - 1);
+                        structure.append("  ".repeat(depth))
+                                .append(entry.relativePath().getFileName());
+                        if (entry.directory()) {
+                            structure.append('/');
                         }
-                        return f1.getPath().compareTo(f2.getPath());
-                    })
-                    .forEach(file -> {
-                        int depth = getRelativeDepth(targetDir, file);
-                        String indent = "  ".repeat(depth);
-                        structure.append(indent).append(file.getName());
+                        structure.append('\n');
                     });
+            if (entries.size() > MAX_ENTRIES) {
+                structure.append("... 已省略 ")
+                        .append(entries.size() - MAX_ENTRIES)
+                        .append(" 个条目\n");
+            }
             return structure.toString();
 
         } catch (Exception e) {
-            String errorMessage = "读取目录结构失败: " + relativeDirPath + ", 错误: " + e.getMessage();
+            String errorMessage = "读取目录结构失败: " + safeRelativeDirPath + ", 错误: " + e.getMessage();
             log.error(errorMessage, e);
             return errorMessage;
         }
     }
 
-    /**
-     * 计算文件相对于根目录的深度
-     */
-    private int getRelativeDepth(File root, File file) {
-        Path rootPath = root.toPath();
-        Path filePath = file.toPath();
-        return rootPath.relativize(filePath).getNameCount() - 1;
+    private List<DirectoryEntry> collectEntries(Path root) throws IOException {
+        List<DirectoryEntry> entries = new ArrayList<>();
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                if (!dir.equals(root) && shouldIgnore(dir.getFileName().toString())) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                if (!dir.equals(root)) {
+                    entries.add(new DirectoryEntry(root.relativize(dir), true));
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                if (!shouldIgnore(file.getFileName().toString())) {
+                    entries.add(new DirectoryEntry(root.relativize(file), false));
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        return entries;
     }
 
     /**
@@ -104,6 +121,9 @@ public class FileDirReadTool extends BaseTool{
 
         // 检查文件扩展名
         return IGNORED_EXTENSIONS.stream().anyMatch(fileName::endsWith);
+    }
+
+    private record DirectoryEntry(Path relativePath, boolean directory) {
     }
 
     @Override

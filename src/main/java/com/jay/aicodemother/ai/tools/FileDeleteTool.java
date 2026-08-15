@@ -1,7 +1,6 @@
 package com.jay.aicodemother.ai.tools;
 
 import cn.hutool.json.JSONObject;
-import com.jay.aicodemother.constant.AppConstant;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
@@ -11,7 +10,6 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 /**
  * 文件删除工具
@@ -28,12 +26,7 @@ public class FileDeleteTool extends BaseTool {
             @ToolMemoryId Long appId
     ) {
         try {
-            Path path = Paths.get(relativeFilePath);
-            if (!path.isAbsolute()) {
-                String projectDirName = "vue_project_" + appId;
-                Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
-                path = projectRoot.resolve(relativeFilePath);
-            }
+            Path path = resolveProjectPath(appId, relativeFilePath);
             if (!Files.exists(path)) {
                 return "警告：文件不存在，无需删除 - " + relativeFilePath;
             }

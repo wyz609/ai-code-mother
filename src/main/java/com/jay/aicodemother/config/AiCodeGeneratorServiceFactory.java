@@ -68,18 +68,26 @@ public class AiCodeGeneratorServiceFactory {
     private ToolManage toolManage;
     /**
      * AI 服务实例缓存
-     *  缓存策略
-     *  最大缓存 1000 个实例
-     *  缓存过期时间 30 分钟
-     *  缓存访问时间 10 分钟
+     * 缓存策略：
+     * - 最大缓存 100 个实例（减少内存占用）
+     * - 写入后 15 分钟过期（缩短过期时间）
+     * - 访问后 5 分钟过期（缩短访问过期时间）
+     * - 使用弱值引用，允许 GC 在内存不足时回收
+     * - 添加内存监控，当缓存占用过大时自动清理
      */
     private final Cache<String, AiCodeGeneratorService> serviceCache = Caffeine.newBuilder()
-            .maximumSize(1000)
-            .expireAfterWrite(Duration.ofMinutes(30))
-            .expireAfterAccess(Duration.ofMinutes(10))
+            .maximumSize(100)  // 减少最大缓存数量，避免内存溢出
+            .expireAfterWrite(Duration.ofMinutes(15))  // 缩短写入过期时间
+            .expireAfterAccess(Duration.ofMinutes(5))   // 缩短访问过期时间
+            .weakValues()  // 使用弱引用，允许 GC 在内存紧张时回收
             .removalListener((key, value, cause) -> {
-                log.debug("AI 服务实例被移除， 缓存键 : {}, 原因 : {}", key, cause);
+                log.debug("AI 服务实例被移除，缓存键: {}, 原因: {}", key, cause);
+                // 当实例被移除时，可以执行清理操作
+                if (value != null) {
+                    log.info("清理 AI 服务实例，释放资源，缓存键: {}", key);
+                }
             })
+            .recordStats()  // 开启统计，便于监控
             .build();
 
     public AiCodeGeneratorService getAiCodeGeneratorService(Long appId){
@@ -93,13 +101,41 @@ public class AiCodeGeneratorServiceFactory {
      * @return
      */
     public AiCodeGeneratorService getAiCodeGeneratorService(Long appId, CodeGenTypeEnum codeGenType){
-        String cacheKey = buildCacheKey(appId, codeGenType);
-        // 如果缓存中没有对应 Key 相应的实例， 则调用 createAiCodeGeneratorService 方法创建实例 并保存到缓存中供后续使用
-        return serviceCache.get(cacheKey, key -> createAiCodeGeneratorService(appId, codeGenType));
+        return getAiCodeGeneratorService(appId, codeGenType, true);
     }
 
-    private String buildCacheKey(Long appId, CodeGenTypeEnum codeGenType) {
-        return appId + "_" + codeGenType.getValue();
+    /**
+     * 首次生成静态页面时不向模型暴露文件工具，避免超长代码被塞入工具 JSON 参数后发生转义截断。
+     * 已有项目的增量修改和 Vue 工程仍需要文件工具。
+     */
+    public AiCodeGeneratorService getAiCodeGeneratorService(Long appId, CodeGenTypeEnum codeGenType,
+                                                             boolean enableFileTools){
+        String cacheKey = buildCacheKey(appId, codeGenType, enableFileTools);
+        // 如果缓存中没有对应 Key 相应的实例， 则调用 createAiCodeGeneratorService 方法创建实例 并保存到缓存中供后续使用
+        return serviceCache.get(cacheKey, key -> createAiCodeGeneratorService(appId, codeGenType, enableFileTools));
+    }
+
+    /**
+     * 获取缓存统计信息，用于监控
+     */
+    public String getCacheStats() {
+        return String.format("AI服务缓存统计: 大小=%d, 命中率=%.2f%%, 命中次数=%d, 未命中次数=%d",
+                serviceCache.estimatedSize(),
+                serviceCache.stats().hitRate() * 100,
+                serviceCache.stats().hitCount(),
+                serviceCache.stats().missCount());
+    }
+
+    /**
+     * 手动清理缓存（可在内存紧张时调用）
+     */
+    public void cleanUpCache() {
+        serviceCache.cleanUp();
+        log.info("AI 服务缓存已清理，当前大小: {}", serviceCache.estimatedSize());
+    }
+
+    private String buildCacheKey(Long appId, CodeGenTypeEnum codeGenType, boolean enableFileTools) {
+        return appId + "_" + codeGenType.getValue() + "_" + (enableFileTools ? "tools" : "text");
     }
 
     /**
@@ -108,8 +144,9 @@ public class AiCodeGeneratorServiceFactory {
      * @param codeGenType
      * @return
      */
-    private AiCodeGeneratorService createAiCodeGeneratorService(Long appId, CodeGenTypeEnum codeGenType){
-        log.info("创建 AI 服务实例， appId : {}", appId);
+    private AiCodeGeneratorService createAiCodeGeneratorService(Long appId, CodeGenTypeEnum codeGenType,
+                                                                  boolean enableFileTools){
+        log.info("创建 AI 服务实例， appId : {}, 文件工具: {}", appId, enableFileTools);
         // 根据 appId 创建独立的对话记忆
         MessageWindowChatMemory chatMemory = MessageWindowChatMemory
                 .builder()
@@ -126,20 +163,27 @@ public class AiCodeGeneratorServiceFactory {
         // 根据代码生成类型选择不同的模型配置
         return switch (codeGenType)
                 {
-                    // vue 项目生成使用推理模型
+                    // Vue 项目需要连续流式输出并频繁调用文件工具，使用普通聊天模型保证兼容性。
+                    // 推理模型在长工具链请求中可能只返回 reasoning/usage 事件，最终没有可用正文。
                     case VUE_PROJECT -> AiServices.builder(AiCodeGeneratorService.class)
                             .chatModel(chatModel) // 默认模型
-                            .streamingChatModel(reasoningStreamingChatModel)
+                            .streamingChatModel(openAiStreamingChatModel)
                             .chatMemoryProvider(memory -> chatMemory)
-                            .tools((Object) toolManage.getTools())
+                            .tools(toolManage.getTools())
                             .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(toolExecutionRequest,"Error: this is not tool called"
                                     + toolExecutionRequest.name())) // 幻觉工具名称策略， 配置了不同的工具时的处理策略， 让框架帮我们处理 AI 出现幻觉的情况， 否则调用对话方法可能会报错
                             .build();
-                    case MULTI_FILE,HTML -> AiServices.builder(AiCodeGeneratorService.class)
-                            .chatModel(chatModel)
-                            .streamingChatModel(openAiStreamingChatModel)
-                            .chatMemory(chatMemory)
-                            .build();
+                    case MULTI_FILE,HTML -> {
+                        var builder = AiServices.builder(AiCodeGeneratorService.class)
+                                .chatModel(chatModel)
+                                .streamingChatModel(openAiStreamingChatModel)
+                                // 方法使用 @MemoryId，必须通过 provider 按 appId 提供聊天记忆。
+                                .chatMemoryProvider(memory -> chatMemory);
+                        if (enableFileTools) {
+                            builder.tools(toolManage.getTools());
+                        }
+                        yield builder.build();
+                    }
                     default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR,"不支持的代码生成类型: " + codeGenType.getValue());
                 };
     }

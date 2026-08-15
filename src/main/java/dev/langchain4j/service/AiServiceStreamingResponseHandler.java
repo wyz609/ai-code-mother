@@ -1,5 +1,6 @@
 package dev.langchain4j.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.langchain4j.Internal;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -35,6 +36,7 @@ import static dev.langchain4j.internal.ValidationUtils.ensureNotNull;
 @Internal
 class AiServiceStreamingResponseHandler implements StreamingChatResponseHandler {
     private static final Logger LOG = LoggerFactory.getLogger(AiServiceStreamingResponseHandler.class);
+    private static final int MAX_MALFORMED_TOOL_ARGUMENT_RETRIES = 2;
 
     private final ChatExecutor chatExecutor;
     private final AiServiceContext context;
@@ -57,6 +59,7 @@ class AiServiceStreamingResponseHandler implements StreamingChatResponseHandler 
     private final Map<String, ToolExecutor> toolExecutors;
     private final List<String> responseBuffer = new ArrayList<>();
     private final boolean hasOutputGuardrails;
+    private int malformedToolArgumentRetryCount;
 
     AiServiceStreamingResponseHandler(
             ChatExecutor chatExecutor,
@@ -107,31 +110,73 @@ class AiServiceStreamingResponseHandler implements StreamingChatResponseHandler 
 
     @Override
     public void onPartialToolExecutionRequest(int index, ToolExecutionRequest partialToolExecutionRequest) {
-        // If we're using output guardrails, then buffer the partial response until the guardrails have completed
-        partialToolExecutionRequestHandler.accept(index, partialToolExecutionRequest);
+        // Tool-call deltas are optional UI events. The complete request is still assembled and
+        // executed in onCompleteResponse, so absence of a listener must not interrupt the model stream.
+        if (partialToolExecutionRequestHandler != null) {
+            partialToolExecutionRequestHandler.accept(index, partialToolExecutionRequest);
+        }
     }
 
     @Override
     public void onCompleteResponse(ChatResponse completeResponse) {
+        if (completeResponse == null || completeResponse.aiMessage() == null) {
+            IllegalStateException error = new IllegalStateException(
+                    "AI 流式响应为空：模型未返回正文或工具调用，请检查模型配置、代理和上游响应");
+            if (errorHandler != null) {
+                errorHandler.accept(error);
+            } else {
+                LOG.warn(error.getMessage());
+            }
+            return;
+        }
         AiMessage aiMessage = completeResponse.aiMessage();
         addToMemory(aiMessage);
 
         if (aiMessage.hasToolExecutionRequests()) {
+            boolean malformedToolArgumentsFound = false;
             for (ToolExecutionRequest toolExecutionRequest : aiMessage.toolExecutionRequests()) {
                 String toolName = toolExecutionRequest.name();
                 ToolExecutor toolExecutor = toolExecutors.get(toolName);
-                String toolExecutionResult = toolExecutor.execute(toolExecutionRequest, memoryId);
+                String toolExecutionResult;
+                boolean toolExecuted = false;
+                try {
+                    toolExecutionResult = toolExecutor.execute(toolExecutionRequest, memoryId);
+                    toolExecuted = true;
+                } catch (RuntimeException error) {
+                    if (!isMalformedToolArguments(error)) {
+                        throw error;
+                    }
+                    malformedToolArgumentsFound = true;
+                    toolExecutionResult = malformedArgumentsFeedback(toolName);
+                    int argumentLength = toolExecutionRequest.arguments() == null
+                            ? 0
+                            : toolExecutionRequest.arguments().length();
+                    LOG.warn("Tool '{}' returned malformed JSON arguments (id: {}, length: {}): {}",
+                            toolName, toolExecutionRequest.id(), argumentLength, error.getMessage());
+                }
                 ToolExecutionResultMessage toolExecutionResultMessage =
                         ToolExecutionResultMessage.from(toolExecutionRequest, toolExecutionResult);
                 addToMemory(toolExecutionResultMessage);
 
-                if (toolExecutionHandler != null) {
+                if (toolExecuted && toolExecutionHandler != null) {
                     ToolExecution toolExecution = ToolExecution.builder()
                             .request(toolExecutionRequest)
                             .result(toolExecutionResult)
                             .build();
                     toolExecutionHandler.accept(toolExecution);
                 }
+            }
+
+            if (malformedToolArgumentsFound
+                    && malformedToolArgumentRetryCount >= MAX_MALFORMED_TOOL_ARGUMENT_RETRIES) {
+                IllegalStateException error = new IllegalStateException(
+                        "AI 连续返回无法解析的工具参数，请重新发送修改请求");
+                if (errorHandler != null) {
+                    errorHandler.accept(error);
+                } else {
+                    LOG.warn(error.getMessage());
+                }
+                return;
             }
 
             ChatRequest chatRequest = ChatRequest.builder()
@@ -155,6 +200,9 @@ class AiServiceStreamingResponseHandler implements StreamingChatResponseHandler 
                     toolExecutors,
                     commonGuardrailParams,
                     methodKey);
+            handler.malformedToolArgumentRetryCount = malformedToolArgumentsFound
+                    ? malformedToolArgumentRetryCount + 1
+                    : 0;
 
             context.streamingChatModel.chat(chatRequest, handler);
         } else {
@@ -213,6 +261,26 @@ class AiServiceStreamingResponseHandler implements StreamingChatResponseHandler 
 
     private List<ChatMessage> messagesToSend(Object memoryId) {
         return getMemory(memoryId).messages();
+    }
+
+    private static boolean isMalformedToolArguments(Throwable error) {
+        Throwable cause = error;
+        while (cause != null) {
+            if (cause instanceof JsonProcessingException) {
+                return true;
+            }
+            if (cause == cause.getCause()) {
+                break;
+            }
+            cause = cause.getCause();
+        }
+        return false;
+    }
+
+    private static String malformedArgumentsFeedback(String toolName) {
+        return "Error: arguments for tool '" + toolName + "' are invalid JSON. "
+                + "Retry this tool call using strict JSON with double-quoted property names. "
+                + "Escape every quote, backslash and line break inside string values, and do not use Markdown fences.";
     }
 
     @Override

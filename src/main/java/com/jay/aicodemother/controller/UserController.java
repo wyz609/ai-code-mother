@@ -15,8 +15,10 @@ import com.jay.aicodemother.model.vo.UserVO;
 import com.jay.aicodemother.utils.PasswordUtil;
 import com.mybatisflex.core.paginate.Page;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,6 +40,7 @@ import java.util.List;
 @RequestMapping("/user")
 @RequiredArgsConstructor
 @Slf4j
+@Validated  // 启用方法级参数验证
 public class UserController {
 
     private final UserService userService;
@@ -114,7 +117,7 @@ public class UserController {
      * @return 用户 id
      */
     @PostMapping("/register")
-    public BaseResponse<Long> userRegister(@RequestBody UserRegisterRequest userRegisterRequest){
+    public BaseResponse<Long> userRegister(@Valid @RequestBody UserRegisterRequest userRegisterRequest){
         ThrowUtils.throwIf(userRegisterRequest == null, ErrorCode.PARAMS_ERROR);
         String userAccount = userRegisterRequest.getUserAccount();
         String userPassword = userRegisterRequest.getUserPassword();
@@ -131,7 +134,7 @@ public class UserController {
      * @return 脱敏后的用户信息
      */
     @PostMapping("/login")
-    public BaseResponse<LoginUserVO> userLogin(@RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request) {
+    public BaseResponse<LoginUserVO> userLogin(@Valid @RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request) {
         log.info("===========> 用户正在登录......");
         ThrowUtils.throwIf(userLoginRequest == null, ErrorCode.PARAMS_ERROR);
         String userAccount = userLoginRequest.getUserAccount();

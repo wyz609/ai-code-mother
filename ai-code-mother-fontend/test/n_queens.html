@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N-Queens Ultimate Visualizer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            /* Neon Theme (Default) */
+            --bg-dark: #0b0f19;
+            --panel-bg: rgba(15, 23, 42, 0.6);
+            --primary: #00f2fe;
+            --secondary: #4facfe;
+            --success: #34d399;
+            --danger: #f43f5e;
+            --warning: #fbbf24;
+            --board-light: rgba(255, 255, 255, 0.1);
+            --board-dark: rgba(0, 0, 0, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        [data-theme="royal"] {
+            --bg-dark: #1e112a;
+            --panel-bg: rgba(45, 20, 60, 0.6);
+            --primary: #facc15;
+            --secondary: #e879f9;
+            --board-light: rgba(232, 121, 249, 0.15);
+            --board-dark: rgba(45, 20, 60, 0.8);
+        }
+
+        [data-theme="classic"] {
+            --bg-dark: #1c1917;
+            --panel-bg: rgba(41, 37, 36, 0.8);
+            --primary: #d6d3d1;
+            --secondary: #a8a29e;
+            --board-light: #f5f5dc;
+            --board-dark: #8b4513;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background: var(--bg-dark);
+            color: #fff;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,0.2) 0, transparent 50%);
+            transition: all 0.5s ease;
+        }
+
+        /* Layout */
+        .app-container {
+            display: grid;
+            grid-template-columns: 320px 1fr 350px;
+            width: 100%;
+            height: 100%;
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.5rem;
+            backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow-y: auto;
+        }
+
+        .panel::-webkit-scrollbar { width: 6px; }
+        .panel::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 3px; }
+
+        .header-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+
+        /* Controls Area */
+        .control-group {
+            margin-bottom: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-size: 0.9rem;
+            color: #cbd5e1;
+            font-weight: 500;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+        }
+
+        select, input[type="number"] {
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+            border: 1px solid var(--glass-border);
+            padding: 0.6rem;
+            border-radius: 0.5rem;
+            outline: none;
+        }
+
+        select:focus, input:focus {
+            border-color: var(--primary);
+        }
+
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            cursor: pointer;
+            margin-bottom: 1rem;
+        }
+
+        /* Button Grid */
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.8rem;
+            margin-top: 1rem;
+        }
+
+        button {
+            padding: 0.8rem;
+            border-radius: 0.6rem;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary { background: linear-gradient(45deg, var(--secondary), var(--primary)); color: #000; }
+        .btn-primary:hover { box-shadow: 0 0 15px var(--primary); transform: translateY(-2px); }
+        .btn-danger { background: linear-gradient(45deg, #f43f5e, #fb7185); color: white; }
+        .btn-warning { background: linear-gradient(45deg, #d97706, #f59e0b); color: white; }
+        .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+        .btn-outline:hover { background: rgba(0, 242, 254, 0.1); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+        /* Main Board Area */
+        .board-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            perspective: 1200px; /* For 3D effect */
+            position: relative;
+        }
+
+        .board-wrapper {
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-style: preserve-3d;
+            padding: 10px;
+            background: var(--glass-border);
+            border-radius: 1rem;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        .board-wrapper.is-3d {
+            transform: rotateX(45deg) rotateZ(-15deg) scale(0.9);
+            box-shadow: 20px 40px 60px rgba(0,0,0,0.6);
+        }
+
+        .board {
+            display: grid;
+            border: 2px solid var(--glass-border);
+            border-radius: 0.5rem;
+            background: #000;
+        }
+
+        .cell {
+            width: clamp(30px, 4vw, 65px);
+            height: clamp(30px, 4vw, 65px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: clamp(20px, 3vw, 40px);
+            position: relative;
+            transition: background-color 0.3s;
+        }
+        
+        .cell.light { background-color: var(--board-light); }
+        .cell.dark { background-color: var(--board-dark); }
+
+        .queen {
+            animation: dropIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            color: #fff;
+            text-shadow: 0 0 15px var(--primary);
+            z-index: 10;
+        }
+
+        [data-theme="classic"] .queen { color: #000; text-shadow: 0 0 5px rgba(255,255,255,0.5); }
+
+        /* Highlights */
+        .cell.checking::after {
+            content: ''; position: absolute; inset: 0;
+            background: rgba(251, 191, 36, 0.3); border: 2px solid var(--warning); box-sizing: border-box;
+            animation: pulse-border 1s infinite;
+        }
+        .cell.invalid::after {
+            content: ''; position: absolute; inset: 0;
+            background: rgba(244, 63, 94, 0.4); box-shadow: inset 0 0 15px rgba(244, 63, 94, 0.8);
+            animation: shake 0.3s;
+        }
+        .cell.valid::after {
+            content: ''; position: absolute; inset: 0;
+            background: rgba(52, 211, 153, 0.3); box-shadow: inset 0 0 15px rgba(52, 211, 153, 0.8);
+        }
+
+        /* Particles */
+        .particle {
+            position: absolute;
+            width: 8px; height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: popOut 0.6s ease-out forwards;
+        }
+
+        /* Right Panel: Logs & Solutions */
+        .panel-section { flex: 1; display: flex; flex-direction: column; overflow: hidden; margin-bottom: 1rem; }
+        .section-title { font-size: 1.1rem; color: var(--primary); margin-bottom: 0.8rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; }
+        
+        .log-box {
+            flex: 1;
+            background: rgba(0,0,0,0.3);
+            border-radius: 0.5rem;
+            padding: 0.8rem;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .log-entry { animation: fadeIn 0.3s; }
+        .log-entry.conflict { color: var(--danger); }
+        .log-entry.success { color: var(--success); }
+        .log-entry.info { color: #94a3b8; }
+
+        .solutions-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            overflow-y: auto;
+            max-height: 250px;
+        }
+
+        .mini-board {
+            display: grid;
+            border: 1px solid var(--glass-border);
+            background: #000;
+        }
+        .mini-cell { aspect-ratio: 1; display: flex; justify-content: center; align-items: center; font-size: 10px; }
+        .mini-cell.light { background: var(--board-light); }
+        .mini-cell.dark { background: var(--board-dark); }
+
+        /* Animations */
+        @keyframes dropIn {
+            0% { transform: translateY(-50px) scale(0.5); opacity: 0; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes popOut {
+            0% { transform: translate(0, 0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+        }
+        @keyframes pulse-border {
+            0% { box-shadow: inset 0 0 0 0 var(--warning); }
+            50% { box-shadow: inset 0 0 10px 2px var(--warning); }
+            100% { box-shadow: inset 0 0 0 0 var(--warning); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Left Panel: Controls -->
+        <aside class="panel">
+            <div class="header-title">N-Queens Ultimate</div>
+
+            <div class="control-group">
+                <label>Theme</label>
+                <select id="theme-select">
+                    <option value="neon">Neon Cyber (Default)</option>
+                    <option value="royal">Royal Palace</option>
+                    <option value="classic">Classic Chess</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Board Size (N) <span id="n-val-display">8</span></label>
+                <input type="range" id="n-input" min="4" max="12" value="8">
+            </div>
+
+            <div class="control-group">
+                <label>Playback Speed</label>
+                <input type="range" id="speed-input" min="1" max="100" value="50">
+            </div>
+
+            <div class="toggle-container">
+                <input type="checkbox" id="toggle-3d">
+                <label for="toggle-3d" style="margin:0; cursor:pointer;">Enable 3D View</label>
+            </div>
+
+            <div class="toggle-container">
+                <input type="checkbox" id="pause-on-solution" checked>
+                <label for="pause-on-solution" style="margin:0; cursor:pointer;">Pause on Solution</label>
+            </div>
+
+            <div class="btn-grid">
+                <button id="btn-start" class="btn-primary">▶ Start</button>
+                <button id="btn-pause" class="btn-warning" disabled>⏸ Pause</button>
+                <button id="btn-step" class="btn-outline" disabled>⏭ Step</button>
+                <button id="btn-reset" class="btn-danger">⏹ Reset</button>
+            </div>
+            
+            <div style="margin-top: 1.5rem; text-align: center; color: var(--success); font-weight: bold; font-size: 1.2rem;">
+                Solutions: <span id="solution-count">0</span>
+            </div>
+        </aside>
+
+        <!-- Center: Board Area -->
+        <main class="board-container">
+            <div class="board-wrapper" id="board-wrapper">
+                <div class="board" id="board"></div>
+            </div>
+        </main>
+
+        <!-- Right Panel: Info -->
+        <aside class="panel">
+            <div class="panel-section" style="flex: 0.8;">
+                <div class="section-title">Execution Logs</div>
+                <div class="log-box" id="log-box"></div>
+            </div>
+            <div class="panel-section">
+                <div class="section-title">Solutions Gallery</div>
+                <div class="solutions-grid" id="solutions-gallery"></div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        // DOM Elements
+        const boardEl = document.getElementById('board');
+        const boardWrapper = document.getElementById('board-wrapper');
+        const nInput = document.getElementById('n-input');
+        const nValDisplay = document.getElementById('n-val-display');
+        const speedInput = document.getElementById('speed-input');
+        const themeSelect = document.getElementById('theme-select');
+        const toggle3D = document.getElementById('toggle-3d');
+        const pauseOnSolution = document.getElementById('pause-on-solution');
+        
+        const btnStart = document.getElementById('btn-start');
+        const btnPause = document.getElementById('btn-pause');
+        const btnStep = document.getElementById('btn-step');
+        const btnReset = document.getElementById('btn-reset');
+        
+        const logBox = document.getElementById('log-box');
+        const solutionCountEl = document.getElementById('solution-count');
+        const galleryEl = document.getElementById('solutions-gallery');
+
+        // State variables
+        let N = 8;
+        let boardState = [];
+        let isRunning = false;
+        let isPaused = false;
+        let stepResolver = null;
+        let abortController = null;
+        let solutionsFound = 0;
+
+        // --- UI Updates ---
+
+        themeSelect.addEventListener('change', (e) => {
+            document.body.setAttribute('data-theme', e.target.value);
+        });
+
+        toggle3D.addEventListener('change', (e) => {
+            if (e.target.checked) boardWrapper.classList.add('is-3d');
+            else boardWrapper.classList.remove('is-3d');
+        });
+
+        nInput.addEventListener('input', (e) => {
+            if (!isRunning) {
+                N = parseInt(e.target.value);
+                nValDisplay.innerText = N;
+                initBoard();
+            }
+        });
+
+        function log(msg, type = 'info') {
+            const el = document.createElement('div');
+            el.className = `log-entry ${type}`;
+            el.innerText = `> ${msg}`;
+            logBox.appendChild(el);
+            logBox.scrollTop = logBox.scrollHeight; // Auto-scroll
+        }
+
+        // --- Core Board Render ---
+
+        function initBoard() {
+            boardEl.innerHTML = '';
+            boardEl.style.gridTemplateColumns = `repeat(${N}, 1fr)`;
+            boardEl.style.gridTemplateRows = `repeat(${N}, 1fr)`;
+            boardState = Array.from({length: N}, () => Array(N).fill(0));
+            
+            for (let r = 0; r < N; r++) {
+                for (let c = 0; c < N; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = `cell ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+                    cell.id = `cell-${r}-${c}`;
+                    boardEl.appendChild(cell);
+                }
+            }
+            logBox.innerHTML = '';
+            galleryEl.innerHTML = '';
+            solutionsFound = 0;
+            solutionCountEl.innerText = 0;
+            log(`Initialized ${N}x${N} board. Ready.`);
+        }
+
+        function createParticles(x, y, cell) {
+            for (let i = 0; i < 8; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                const angle = (i / 8) * Math.PI * 2;
+                const dist = 30 + Math.random() * 20;
+                p.style.setProperty('--tx', `${Math.cos(angle) * dist}px`);
+                p.style.setProperty('--ty', `${Math.sin(angle) * dist}px`);
+                p.style.left = '50%'; p.style.top = '50%';
+                cell.appendChild(p);
+                setTimeout(() => p.remove(), 600);
+            }
+        }
+
+        function setQueen(r, c) {
+            const cell = document.getElementById(`cell-${r}-${c}`);
+            if(!cell) return;
+            boardState[r][c] = 1;
+            cell.innerHTML = '<div class="queen">♛</div>';
+            createParticles(0, 0, cell);
+        }
+
+        function removeQueen(r, c) {
+            const cell = document.getElementById(`cell-${r}-${c}`);
+            if(!cell) return;
+            boardState[r][c] = 0;
+            cell.innerHTML = '';
+        }
+
+        function setHighlight(r, c, type) {
+            const cell = document.getElementById(`cell-${r}-${c}`);
+            if (cell) cell.classList.add(type);
+        }
+        function clearHighlight(r, c, type) {
+            const cell = document.getElementById(`cell-${r}-${c}`);
+            if (cell) cell.classList.remove(type);
+        }
+        function clearAllHighlights() {
+            document.querySelectorAll('.cell').forEach(c => {
+                c.classList.remove('checking', 'invalid', 'valid');
+            });
+        }
+
+        function addMiniBoard(state) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'mini-board';
+            wrapper.style.gridTemplateColumns = `repeat(${N}, 1fr)`;
+            
+            for (let r = 0; r < N; r++) {
+                for (let c = 0; c < N; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = `mini-cell ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+                    if (state[r][c] === 1) cell.innerText = '♛';
+                    wrapper.appendChild(cell);
+                }
+            }
+            galleryEl.appendChild(wrapper);
+            galleryEl.scrollTop = galleryEl.scrollHeight;
+        }
+
+        // --- Execution Control & Sync ---
+
+        // Custom wait function that handles Speed, Pause, and Step mechanics
+        async function wait(overrideDelay = null, signal = null) {
+            const sig = signal || abortController?.signal;
+            if (sig && sig.aborted) throw new Error('aborted');
+
+            // Handle Pause / Step logic
+            if (isPaused) {
+                // Wait indefinitely until unpaused or step is clicked
+                await new Promise(resolve => { stepResolver = resolve; });
+                if (sig && sig.aborted) throw new Error('aborted');
+            }
+
+            // Normal speed delay
+            const speed = parseInt(speedInput.value);
+            // 1 = slowest (800ms), 100 = fastest (0ms)
+            let delay = overrideDelay !== null ? overrideDelay : Math.max(0, 800 - speed * 8);
+            
+            if (delay > 0) {
+                await new Promise(r => setTimeout(r, delay));
+            }
+        }
+
+        // --- Algorithm Logic ---
+
+        async function checkSafe(row, col, signal) {
+            const isFast = parseInt(speedInput.value) > 90 && !isPaused;
+
+            // Check column
+            for (let i = 0; i < row; i++) {
+                if (!isFast) { setHighlight(i, col, 'checking'); await wait(null, signal); }
+                if (boardState[i][col]) {
+                    setHighlight(i, col, 'invalid');
+                    if (!isFast) await wait(null, signal);
+                    clearHighlight(i, col, 'invalid');
+                    if (!isFast) clearHighlight(i, col, 'checking');
+                    return false;
+                }
+                if (!isFast) clearHighlight(i, col, 'checking');
+            }
+
+            // Check upper-left diag
+            for (let i = row, j = col; i >= 0 && j >= 0; i--, j--) {
+                if (!isFast) { setHighlight(i, j, 'checking'); await wait(null, signal); }
+                if (boardState[i][j]) {
+                    setHighlight(i, j, 'invalid');
+                    if (!isFast) await wait(null, signal);
+                    clearHighlight(i, j, 'invalid');
+                    if (!isFast) clearHighlight(i, j, 'checking');
+                    return false;
+                }
+                if (!isFast) clearHighlight(i, j, 'checking');
+            }
+
+            // Check upper-right diag
+            for (let i = row, j = col; i >= 0 && j < N; i--, j++) {
+                if (!isFast) { setHighlight(i, j, 'checking'); await wait(null, signal); }
+                if (boardState[i][j]) {
+                    setHighlight(i, j, 'invalid');
+                    if (!isFast) await wait(null, signal);
+                    clearHighlight(i, j, 'invalid');
+                    if (!isFast) clearHighlight(i, j, 'checking');
+                    return false;
+                }
+                if (!isFast) clearHighlight(i, j, 'checking');
+            }
+
+            return true;
+        }
+
+        async function solveNQueens(row, signal) {
+            if (signal.aborted) throw new Error('aborted');
+
+            // Base case: Solution found
+            if (row === N) {
+                solutionsFound++;
+                solutionCountEl.innerText = solutionsFound;
+                log(`Solution #${solutionsFound} found!`, 'success');
+                addMiniBoard(boardState);
+
+                // Highlight all queens green temporarily
+                document.querySelectorAll('.cell').forEach(c => {
+                    if (c.innerHTML !== '') c.classList.add('valid');
+                });
+
+                if (pauseOnSolution.checked) {
+                    togglePause(true);
+                    log(`Paused on solution. Click Step or Play to continue.`, 'warning');
+                } else {
+                    await wait(800, signal); // Pause briefly to admire
+                }
+                
+                clearAllHighlights();
+                return;
+            }
+
+            for (let col = 0; col < N; col++) {
+                if (signal.aborted) throw new Error('aborted');
+                
+                log(`Evaluating Row ${row}, Col ${col}`);
+                setHighlight(row, col, 'checking');
+                await wait(null, signal);
+
+                const safe = await checkSafe(row, col, signal);
+                
+                if (safe) {
+                    clearHighlight(row, col, 'checking');
+                    setHighlight(row, col, 'valid');
+                    setQueen(row, col);
+                    log(`Placed Queen at (${row}, ${col})`, 'success');
+                    await wait(null, signal);
+                    clearHighlight(row, col, 'valid');
+
+                    // Recurse
+                    await solveNQueens(row + 1, signal);
+                    
+                    if (signal.aborted) throw new Error('aborted');
+
+                    // Backtrack
+                    log(`Backtracking from (${row}, ${col})`, 'danger');
+                    setHighlight(row, col, 'invalid');
+                    removeQueen(row, col);
+                    await wait(null, signal);
+                    clearHighlight(row, col, 'invalid');
+                } else {
+                    log(`Conflict at (${row}, ${col})`, 'danger');
+                    clearHighlight(row, col, 'checking');
+                }
+            }
+        }
+
+        // --- Button Handlers ---
+
+        function togglePause(forcePause = null) {
+            isPaused = forcePause !== null ? forcePause : !isPaused;
+            if (isPaused) {
+                btnPause.innerHTML = '▶ Resume';
+                btnPause.classList.replace('btn-warning', 'btn-primary');
+                btnStep.disabled = false;
+                log('Execution paused.', 'warning');
+            } else {
+                btnPause.innerHTML = '⏸ Pause';
+                btnPause.classList.replace('btn-primary', 'btn-warning');
+                btnStep.disabled = true;
+                log('Execution resumed.', 'success');
+                // Release the lock
+                if (stepResolver) {
+                    stepResolver();
+                    stepResolver = null;
+                }
+            }
+        }
+
+        btnStart.addEventListener('click', async () => {
+            if (isRunning) return;
+            
+            // Setup UI states
+            isRunning = true;
+            isPaused = false;
+            btnStart.disabled = true;
+            btnPause.disabled = false;
+            btnStep.disabled = true;
+            nInput.disabled = true;
+            
+            initBoard(); // Clear previous runs
+            
+            abortController = new AbortController();
+            
+            try {
+                log('Algorithm started.');
+                await solveNQueens(0, abortController.signal);
+                log(`Finished! Total solutions: ${solutionsFound}`, 'success');
+            } catch (e) {
+                if (e.message !== 'aborted') {
+                    log('An error occurred during execution.', 'danger');
+                    console.error(e);
+                }
+            } finally {
+                // Reset UI states
+                isRunning = false;
+                btnStart.disabled = false;
+                btnPause.disabled = true;
+                btnStep.disabled = true;
+                nInput.disabled = false;
+                btnPause.innerHTML = '⏸ Pause';
+                btnPause.classList.replace('btn-primary', 'btn-warning');
+            }
+        });
+
+        btnPause.addEventListener('click', () => {
+            if (!isRunning) return;
+            togglePause();
+        });
+
+        btnStep.addEventListener('click', () => {
+            if (isPaused && stepResolver) {
+                // Resolve one step and keep paused
+                stepResolver();
+                stepResolver = null;
+            }
+        });
+
+        btnReset.addEventListener('click', () => {
+            if (abortController) {
+                abortController.abort(); // Cancel running promises
+            }
+            if (stepResolver) {
+                stepResolver(); // Release any stuck pause
+                stepResolver = null;
+            }
+            isRunning = false;
+            isPaused = false;
+            btnStart.disabled = false;
+            btnPause.disabled = true;
+            btnStep.disabled = true;
+            nInput.disabled = false;
+            btnPause.innerHTML = '⏸ Pause';
+            btnPause.classList.replace('btn-primary', 'btn-warning');
+            
+            initBoard();
+            log('Reset complete.', 'danger');
+        });
+
+        // Initialization
+        initBoard();
+
+    </script>
+</body>
+</html>

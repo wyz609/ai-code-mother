@@ -1,7 +1,6 @@
 package com.jay.aicodemother.ai.tools;
 
 import cn.hutool.json.JSONObject;
-import com.jay.aicodemother.constant.AppConstant;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
@@ -11,7 +10,6 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 
 /**
@@ -33,12 +31,7 @@ public class FileModifyTool extends BaseTool {
             @ToolMemoryId Long appId
     ) {
         try {
-            Path path = Paths.get(relativeFilePath);
-            if (!path.isAbsolute()) {
-                String projectDirName = "vue_project_" + appId;
-                Path projectRoot = Paths.get(AppConstant.CODE_OUTPUT_ROOT_DIR, projectDirName);
-                path = projectRoot.resolve(relativeFilePath);
-            }
+            Path path = resolveProjectPath(appId, relativeFilePath);
             if (!Files.exists(path) || !Files.isRegularFile(path)) {
                 return "错误：文件不存在或不是文件 - " + relativeFilePath;
             }
@@ -75,19 +68,10 @@ public class FileModifyTool extends BaseTool {
         String relativeFilePath = arguments.getStr("relativeFilePath");
         String oldContent = arguments.getStr("oldContent");
         String newContent = arguments.getStr("newContent");
-        // 显示对比内容
-        return String.format("""
-                [工具调用] %s %s
-                
-                替换前：
-                ```
-                %s
-                ```
-                
-                替换后：
-                ```
-                %s
-                ```
-                """, getDisplayName(), relativeFilePath, oldContent, newContent);
+        int oldContentLength = oldContent == null ? 0 : oldContent.length();
+        int newContentLength = newContent == null ? 0 : newContent.length();
+        // 原始和替换内容会很长；项目文件才是源码的唯一展示来源。
+        return String.format("[工具调用] %s %s（替换 %d -> %d 个字符）",
+                getDisplayName(), relativeFilePath, oldContentLength, newContentLength);
     }
 }

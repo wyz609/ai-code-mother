@@ -29,13 +29,13 @@ class AiCodeMotherApplicationTests {
 
     @Test
     void generateHtmlCode(){
-        HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode("做一个程序员阿阳的工作记录小工具，代码不超过100行");
+        HtmlCodeResult result = aiCodeGeneratorService.generateHtmlCode(1L, "做一个程序员阿阳的工作记录小工具，代码不超过100行");
         Assertions.assertNotNull(result);
     }
 
     @Test
     void generateMultiFileCode(){
-        MultiFileCodeResult result = aiCodeGeneratorService.generateMultiFileCode("做一个程序员阿阳的留言板，不超过50行");
+        MultiFileCodeResult result = aiCodeGeneratorService.generateMultiFileCode(1L, "做一个程序员阿阳的留言板，不超过50行");
         Assertions.assertNotNull(result);
     }
 
