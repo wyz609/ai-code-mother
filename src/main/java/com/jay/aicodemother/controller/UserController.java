@@ -118,11 +118,17 @@ public class UserController {
      */
     @PostMapping("/register")
     public BaseResponse<Long> userRegister(@Valid @RequestBody UserRegisterRequest userRegisterRequest){
+        // 请求体不能为空
         ThrowUtils.throwIf(userRegisterRequest == null, ErrorCode.PARAMS_ERROR);
+        // 取出注册账号
         String userAccount = userRegisterRequest.getUserAccount();
+        // 取出注册密码
         String userPassword = userRegisterRequest.getUserPassword();
+        // 取出确认密码（用于校验两次输入一致）
         String checkPassword = userRegisterRequest.getCheckPassword();
+        // 调用服务层执行注册（内部校验账号唯一性、密码长度、两次密码一致性等）
         Long result = userService.userRegister(userAccount, userPassword, checkPassword);
+        // 返回新注册用户的 ID
         return ResultUtils.success(result);
     }
 
@@ -135,12 +141,19 @@ public class UserController {
      */
     @PostMapping("/login")
     public BaseResponse<LoginUserVO> userLogin(@Valid @RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request) {
+        // 记录登录开始日志
         log.info("===========> 用户正在登录......");
+        // 请求体不能为空
         ThrowUtils.throwIf(userLoginRequest == null, ErrorCode.PARAMS_ERROR);
+        // 取出登录账号
         String userAccount = userLoginRequest.getUserAccount();
+        // 取出登录密码
         String userPassword = userLoginRequest.getUserPassword();
+        // 调用服务层完成登录（校验密码并写入会话），返回脱敏后的登录用户信息
         LoginUserVO loginUserVO = userService.userLogin(userAccount, userPassword, request);
+        // 记录登录成功日志
         log.info("===========> 用户登录成功......");
+        // 返回登录用户信息
         return ResultUtils.success(loginUserVO);
     }
 
@@ -151,7 +164,9 @@ public class UserController {
      */
     @GetMapping("/get/login")
     public BaseResponse<LoginUserVO> getLoginUser(HttpServletRequest request) {
+        // 从会话中解析当前登录用户（未登录会抛出未登录异常）
         User loginUser = userService.getLoginUser(request);
+        // 转为脱敏 VO 返回
         return ResultUtils.success(userService.getLoginUserVO(loginUser));
     }
 
@@ -162,26 +177,36 @@ public class UserController {
      */
     @PostMapping("/logout")
     public BaseResponse<Boolean> userLogout(HttpServletRequest request) {
+        // 调用服务层清除会话中的登录态
         boolean result = userService.userLogout(request);
+        // 返回注销是否成功
         return ResultUtils.success(result);
     }
 
 
     /**
-     * 创建用户
+     * 创建用户（仅管理员）
      */
     @PostMapping("/add")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Long> addUser(@RequestBody UserAddRequest userAddRequest) {
+        // 请求体不能为空
         ThrowUtils.throwIf(userAddRequest == null, ErrorCode.PARAMS_ERROR);
+        // 创建用户实体
         User user = new User();
+        // 将请求参数（账号、昵称、头像等）拷贝到实体
         BeanUtil.copyProperties(userAddRequest, user);
         // 默认密码 12345678
         final String DEFAULT_PASSWORD = "12345678";
+        // 对默认密码进行加密存储
         String encryptPassword = PasswordUtil.encrypt(DEFAULT_PASSWORD);
+        // 设置加密后的密码
         user.setUserPassword(encryptPassword);
+        // 保存用户
         boolean result = userService.save(user);
+        // 保存失败则抛出操作异常
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        // 返回新用户 ID
         return ResultUtils.success(user.getId());
     }
 
@@ -191,47 +216,61 @@ public class UserController {
     @GetMapping("/get")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<User> getUserById(long id) {
+        // ID 必须为正数
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
+        // 查询用户
         User user = userService.getById(id);
+        // 用户不存在则 404
         ThrowUtils.throwIf(user == null, ErrorCode.NOT_FOUND_ERROR);
+        // 返回用户实体（管理员可见完整信息）
         return ResultUtils.success(user);
     }
 
     /**
-     * 根据 id 获取包装类
+     * 根据 id 获取包装类（脱敏后的用户视图）
      */
     @GetMapping("/get/vo")
     public BaseResponse<UserVO> getUserVOById(long id) {
+        // 复用管理员查询接口获取用户实体
         BaseResponse<User> response = getUserById(id);
+        // 取出用户实体
         User user = response.getData();
+        // 转换为脱敏 VO（隐藏密码等敏感字段）并返回
         return ResultUtils.success(userService.getUserVO(user));
     }
 
     /**
-     * 删除用户
+     * 删除用户（仅管理员）
      */
     @PostMapping("/delete")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> deleteUser(@RequestBody DeleteRequest deleteRequest) {
+        // 请求体不能为空且 ID 必须为正数
         if (deleteRequest == null || deleteRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+        // 执行删除
         boolean b = userService.removeById(deleteRequest.getId());
         return ResultUtils.success(b);
     }
 
     /**
-     * 更新用户
+     * 更新用户（仅管理员）
      */
     @PostMapping("/update")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> updateUser(@RequestBody UserUpdateRequest userUpdateRequest) {
+        // 请求体不能为空且 ID 不能为空
         if (userUpdateRequest == null || userUpdateRequest.getId() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+        // 创建用户实体
         User user = new User();
+        // 将请求参数（昵称、头像、简介等）拷贝到实体
         BeanUtil.copyProperties(userUpdateRequest, user);
+        // 执行更新
         boolean result = userService.updateById(user);
+        // 更新失败则抛出操作异常
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
         return ResultUtils.success(true);
     }
@@ -244,15 +283,22 @@ public class UserController {
     @PostMapping("/list/page/vo")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Page<UserVO>> listUserVOByPage(@RequestBody UserQueryRequest userQueryRequest) {
+        // 请求体不能为空
         ThrowUtils.throwIf(userQueryRequest == null, ErrorCode.PARAMS_ERROR);
+        // 取出分页页码
         long pageNum = userQueryRequest.getPageNum();
+        // 取出分页大小
         long pageSize = userQueryRequest.getPageSize();
+        // 按查询条件（账号/昵称模糊等）分页查询用户实体
         Page<User> userPage = userService.page(Page.of(pageNum, pageSize),
                 userService.getQueryWrapper(userQueryRequest));
-        // 数据脱敏
+        // 数据脱敏：构建同结构的分页 VO 对象，复用总数
         Page<UserVO> userVOPage = new Page<>(pageNum, pageSize, userPage.getTotalRow());
+        // 将用户实体列表批量转换为脱敏 VO 列表
         List<UserVO> userVOList = userService.getUserVOList(userPage.getRecords());
+        // 将 VO 列表写入分页结果
         userVOPage.setRecords(userVOList);
+        // 返回脱敏后的分页结果
         return ResultUtils.success(userVOPage);
     }
 

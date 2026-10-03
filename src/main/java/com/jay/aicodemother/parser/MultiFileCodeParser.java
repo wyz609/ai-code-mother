@@ -16,16 +16,29 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class MultiFileCodeParser implements CodeParser<MultiFileCodeResult> {
+
+    private static final Pattern HTML_HEADING_PATTERN = Pattern.compile(
+            "(?:^|\\R)#{1,6}\\s*(?:index\\.html|HTML)\\s*\\R?\\s*```html\\s*([\\s\\S]*?)```",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern HTML_BLOCK_PATTERN = Pattern.compile(
+            "```html\\s*([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CSS_HEADING_PATTERN = Pattern.compile(
+            "(?:^|\\R)#{1,6}\\s*(?:style\\.css|CSS)\\s*\\R?\\s*```css\\s*([\\s\\S]*?)```",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern CSS_BLOCK_PATTERN = Pattern.compile(
+            "```css\\s*([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
+    private static final Pattern JS_HEADING_PATTERN = Pattern.compile(
+            "(?:^|\\R)#{1,6}\\s*(?:script\\.js|JavaScript|JS)\\s*\\R?\\s*```(?:javascript|js)\\s*([\\s\\S]*?)```",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern JS_BLOCK_PATTERN = Pattern.compile(
+            "```(?:javascript|js)\\s*([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
+
     @Override
     public MultiFileCodeResult parseCode(String codeContent) {
         MultiFileCodeResult result = new MultiFileCodeResult();
 
-        // 提取HTML代码
-        Pattern htmlPattern = Pattern.compile("## index\\.html\\s*```html([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
-        Matcher htmlMatcher = htmlPattern.matcher(codeContent);
-        if (htmlMatcher.find()) {
-            result.setHtmlCode(htmlMatcher.group(1).trim());
-        }
+        // 优先按文件标题提取；模型省略标题时回退到对应语言的第一个代码块。
+        result.setHtmlCode(extractFirst(codeContent, HTML_HEADING_PATTERN, HTML_BLOCK_PATTERN));
 
         // 提取CSS代码
         String cssCode = extractCssCode(codeContent);
@@ -48,12 +61,7 @@ public class MultiFileCodeParser implements CodeParser<MultiFileCodeResult> {
      * @return CSS代码
      */
     private static String extractCssCode(String content) {
-        Pattern cssPattern = Pattern.compile("## style\\.css\\s*```css([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
-        Matcher cssMatcher = cssPattern.matcher(content);
-        if (cssMatcher.find()) {
-            return cssMatcher.group(1).trim();
-        }
-        return null;
+        return extractFirst(content, CSS_HEADING_PATTERN, CSS_BLOCK_PATTERN);
     }
 
     /**
@@ -62,12 +70,19 @@ public class MultiFileCodeParser implements CodeParser<MultiFileCodeResult> {
      * @return JS代码
      */
     private static String extractJsCode(String content) {
-        Pattern jsPattern = Pattern.compile("## script\\.js\\s*```javascript([\\s\\S]*?)```", Pattern.CASE_INSENSITIVE);
-        Matcher jsMatcher = jsPattern.matcher(content);
-        if (jsMatcher.find()) {
-            return jsMatcher.group(1).trim();
+        return extractFirst(content, JS_HEADING_PATTERN, JS_BLOCK_PATTERN);
+    }
+
+    private static String extractFirst(String content, Pattern primaryPattern, Pattern fallbackPattern) {
+        if (content == null || content.isBlank()) {
+            return null;
         }
-        return null;
+        Matcher primaryMatcher = primaryPattern.matcher(content);
+        if (primaryMatcher.find()) {
+            return primaryMatcher.group(1).trim();
+        }
+        Matcher fallbackMatcher = fallbackPattern.matcher(content);
+        return fallbackMatcher.find() ? fallbackMatcher.group(1).trim() : null;
     }
 
     /**

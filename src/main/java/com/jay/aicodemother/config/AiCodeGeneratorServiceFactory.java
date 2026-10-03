@@ -91,6 +91,7 @@ public class AiCodeGeneratorServiceFactory {
             .build();
 
     public AiCodeGeneratorService getAiCodeGeneratorService(Long appId){
+        // 缺省按 HTML 类型获取服务实例
         return getAiCodeGeneratorService(appId, CodeGenTypeEnum.HTML);
     }
 
@@ -101,6 +102,7 @@ public class AiCodeGeneratorServiceFactory {
      * @return
      */
     public AiCodeGeneratorService getAiCodeGeneratorService(Long appId, CodeGenTypeEnum codeGenType){
+        // 默认启用文件工具
         return getAiCodeGeneratorService(appId, codeGenType, true);
     }
 
@@ -110,6 +112,7 @@ public class AiCodeGeneratorServiceFactory {
      */
     public AiCodeGeneratorService getAiCodeGeneratorService(Long appId, CodeGenTypeEnum codeGenType,
                                                              boolean enableFileTools){
+        // 构建缓存键（应用 ID + 类型 + 是否启用工具）
         String cacheKey = buildCacheKey(appId, codeGenType, enableFileTools);
         // 如果缓存中没有对应 Key 相应的实例， 则调用 createAiCodeGeneratorService 方法创建实例 并保存到缓存中供后续使用
         return serviceCache.get(cacheKey, key -> createAiCodeGeneratorService(appId, codeGenType, enableFileTools));
@@ -119,6 +122,7 @@ public class AiCodeGeneratorServiceFactory {
      * 获取缓存统计信息，用于监控
      */
     public String getCacheStats() {
+        // 格式化输出缓存大小、命中率、命中/未命中次数
         return String.format("AI服务缓存统计: 大小=%d, 命中率=%.2f%%, 命中次数=%d, 未命中次数=%d",
                 serviceCache.estimatedSize(),
                 serviceCache.stats().hitRate() * 100,
@@ -130,10 +134,15 @@ public class AiCodeGeneratorServiceFactory {
      * 手动清理缓存（可在内存紧张时调用）
      */
     public void cleanUpCache() {
+        // 执行缓存清理
         serviceCache.cleanUp();
+        // 记录清理后缓存大小
         log.info("AI 服务缓存已清理，当前大小: {}", serviceCache.estimatedSize());
     }
 
+    /**
+     * 构建缓存键：appId_类型_是否启用工具
+     */
     private String buildCacheKey(Long appId, CodeGenTypeEnum codeGenType, boolean enableFileTools) {
         return appId + "_" + codeGenType.getValue() + "_" + (enableFileTools ? "tools" : "text");
     }
@@ -146,18 +155,22 @@ public class AiCodeGeneratorServiceFactory {
      */
     private AiCodeGeneratorService createAiCodeGeneratorService(Long appId, CodeGenTypeEnum codeGenType,
                                                                   boolean enableFileTools){
+        // 记录创建日志
         log.info("创建 AI 服务实例， appId : {}, 文件工具: {}", appId, enableFileTools);
-        // 根据 appId 创建独立的对话记忆
+        // 根据 appId 创建独立的对话记忆（每条应用独立上下文）
         MessageWindowChatMemory chatMemory = MessageWindowChatMemory
                 .builder()
                 .id(appId)
+                // 使用 Redis 存储聊天记忆（支持分布式共享）
                 .chatMemoryStore(redisChatMemoryStore)
+                // 最多保留 100 条消息
                 .maxMessages(100)
                 .build();
         try {
-            // 从数据库中加载历史对话到记忆中
+            // 从数据库中加载历史对话到记忆中（最多 20 条）
             chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);
         } catch (Exception e) {
+            // 加载失败则使用空记忆
             log.error("加载聊天历史记录时出错，将使用空的记忆实例: ", e);
         }
         // 根据代码生成类型选择不同的模型配置
@@ -173,41 +186,51 @@ public class AiCodeGeneratorServiceFactory {
                             .hallucinatedToolNameStrategy(toolExecutionRequest -> ToolExecutionResultMessage.from(toolExecutionRequest,"Error: this is not tool called"
                                     + toolExecutionRequest.name())) // 幻觉工具名称策略， 配置了不同的工具时的处理策略， 让框架帮我们处理 AI 出现幻觉的情况， 否则调用对话方法可能会报错
                             .build();
+                    // HTML/多文件：可选启用文件工具
                     case MULTI_FILE,HTML -> {
+                        // 构建服务实例（聊天模型 + 流式模型 + 按应用记忆）
                         var builder = AiServices.builder(AiCodeGeneratorService.class)
                                 .chatModel(chatModel)
                                 .streamingChatModel(openAiStreamingChatModel)
                                 // 方法使用 @MemoryId，必须通过 provider 按 appId 提供聊天记忆。
                                 .chatMemoryProvider(memory -> chatMemory);
+                        // 仅在需要时挂载文件工具
                         if (enableFileTools) {
                             builder.tools(toolManage.getTools());
                         }
+                        // 返回构建结果
                         yield builder.build();
                     }
+                    // 其他类型不支持
                     default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR,"不支持的代码生成类型: " + codeGenType.getValue());
                 };
     }
 
     /**
-     * 创建 AI 服务实例
+     * 创建 AI 服务实例（默认应用 ID=0，用于通用 Bean）
      * @param appId
      * @return
      */
     private AiCodeGeneratorService createAiCodeGeneratorService(Long appId){
+        // 记录创建日志
         log.info("创建 AI 服务实例， appId : {}", appId);
         // 根据 appId 创建独立的对话记忆
         MessageWindowChatMemory chatMemory = MessageWindowChatMemory
                 .builder()
                 .id(appId)
+                // Redis 存储
                 .chatMemoryStore(redisChatMemoryStore)
+                // 最多 20 条消息
                 .maxMessages(20)
                 .build();
         try {
             // 从数据库中加载历史对话到记忆中
             chatHistoryService.loadChatHistoryToMemory(appId, chatMemory, 20);
         } catch (Exception e) {
+            // 加载失败使用空记忆
             log.error("加载聊天历史记录时出错，将使用空的记忆实例: ", e);
         }
+        // 构建基础 AI 服务实例
         return AiServices.builder(AiCodeGeneratorService.class)
                 .chatModel(chatModel)
                 .streamingChatModel(openAiStreamingChatModel)
@@ -215,8 +238,12 @@ public class AiCodeGeneratorServiceFactory {
                 .build();
     }
 
+    /**
+     * 暴露默认 AI 代码生成服务 Bean（通用实例）
+     */
     @Bean
     public AiCodeGeneratorService aiCodeGeneratorService(){
+        // 使用默认应用 ID 创建通用实例
         return getAiCodeGeneratorService(0L);
     }
 

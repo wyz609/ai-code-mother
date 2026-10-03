@@ -35,12 +35,13 @@ public class CosManager {
      */
     public PutObjectResult putObject(String key, File file) {
         try {
-            // 验证参数
+            // 验证参数：key 不能为空
             if (key == null || key.isEmpty()) {
                 log.error("COS上传失败：key不能为空");
                 return null;
             }
             
+            // 验证参数：文件必须存在
             if (file == null || !file.exists()) {
                 log.error("COS上传失败：文件不存在，key: {}", key);
                 return null;
@@ -51,18 +52,23 @@ public class CosManager {
                 key = "/" + key;
             }
             
+            // 记录上传日志（bucket、key、文件路径）
             log.info("准备上传文件到COS: bucket={}, key={}, file={}", 
                     cosClientConfig.getBucket(), key, file.getAbsolutePath());
             
+            // 构造上传请求并执行上传
             PutObjectRequest putObjectRequest = new PutObjectRequest(cosClientConfig.getBucket(), key, file);
             PutObjectResult result = cosClient.putObject(putObjectRequest);
+            // 记录上传成功日志
             log.info("文件上传COS成功: bucket={}, key={}", cosClientConfig.getBucket(), key);
             return result;
         } catch (CosClientException e) {
+            // 捕获 COS 客户端异常并记录日志
             log.error("COS上传失败：bucket={}, key={}, error={}", 
                     cosClientConfig.getBucket(), key, e.getMessage(), e);
             return null;
         } catch (Exception e) {
+            // 捕获其他未知异常
             log.error("COS上传发生未知错误：bucket={}, key={}, error={}", 
                     cosClientConfig.getBucket(), key, e.getMessage(), e);
             return null;
@@ -79,21 +85,27 @@ public class CosManager {
     public String uploadFile(String key, File file) {
         // 上传文件
         PutObjectResult result = putObject(key, file);
+        // 上传成功则构建访问 URL
         if (result != null) {
             // 构建访问URL，确保host末尾没有/，key开头有/
             String host = cosClientConfig.getHost();
+            // 去掉 host 末尾斜杠避免双斜杠
             if (host.endsWith("/")) {
                 host = host.substring(0, host.length() - 1);
             }
             
+            // 确保 key 以 / 开头
             if (!key.startsWith("/")) {
                 key = "/" + key;
             }
             
+            // 拼接完整访问 URL（host + 对象键）
             String url = String.format("%s%s", host, key);
+            // 记录上传成功日志
             log.info("文件上传COS成功: {} -> {}", file.getName(), url);
             return url;
         } else {
+            // 上传失败记录错误日志
             log.error("文件上传COS失败，返回结果为空，key: {}, file: {}", key, file.getAbsolutePath());
             return null;
         }

@@ -48,16 +48,18 @@ public class ReasoningStreamingChatModelConfig {
      */
     @Bean
     public StreamingChatModel reasoningStreamingChatModel(){
+        // 记录模型初始化日志
         log.info("初始化推理流式模型，baseUrl: {}, modelName: {}", baseUrl, modelName);
 
+        // 构建 OpenAI 兼容的推理流式模型（用于复杂推理场景）
         return OpenAiStreamingChatModel.builder()
-                .apiKey(apiKey)
-                .modelName(modelName)
-                .maxTokens(maxTokens)
-                .temperature(temperature)
-                .baseUrl(baseUrl)
-                .logRequests(logRequests)
-                .logResponses(logResponses)
+                .apiKey(apiKey)         // API 密钥
+                .modelName(modelName)   // 模型名称（如 deepseek-reasoner）
+                .maxTokens(maxTokens)   // 最大生成 token 数
+                .temperature(temperature) // 采样温度
+                .baseUrl(baseUrl)       // API 基础地址
+                .logRequests(logRequests) // 是否记录请求日志
+                .logResponses(logResponses) // 是否记录响应日志
                 .timeout(Duration.of(120, ChronoUnit.SECONDS)) // 增加超时时间到 120 秒
                 .build();
     }

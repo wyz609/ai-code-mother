@@ -21,20 +21,24 @@ import java.util.Map;
 @Component
 public class ToolManage {
 
-    // 定义根据工具名称映射到工具的 Map
+    // 定义根据工具名称映射到工具的 Map（工具注册表）
     private final Map<String, BaseTool> toolMap = new HashMap<>();
 
-    // 自动注入所有工具类
+    // 自动注入所有工具类（Spring 会将所有 BaseTool 子类 Bean 注入数组）
     @Resource
     private BaseTool[] tools;
 
-    // 初始化工具映射
+    // 初始化工具映射：容器启动后自动调用
     @PostConstruct
     public void init() {
+        // 遍历所有工具实例
         for(BaseTool tool : tools){
+            // 以工具英文名为 key 注册到映射表
             toolMap.put(tool.getToolName(), tool);
+            // 记录工具加载日志
             log.info("已加载工具：{} -> {}", tool.getToolName(), tool.getDisplayName());
         }
+        // 记录工具总数
         log.info("工具管理器加载完成,已加载 {} 个工具", toolMap.size());
     }
 
@@ -44,6 +48,7 @@ public class ToolManage {
      * @return
      */
     public BaseTool getTool(String toolName) {
+        // 从注册表按名称查询工具实例
         return toolMap.get(toolName);
     }
 

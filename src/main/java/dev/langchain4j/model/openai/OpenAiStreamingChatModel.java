@@ -107,10 +107,11 @@ public class OpenAiStreamingChatModel implements StreamingChatModel {
 
     @Override
     public void doChat(ChatRequest chatRequest, StreamingChatResponseHandler handler) {
-
+        // 取请求参数并校验
         OpenAiChatRequestParameters parameters = (OpenAiChatRequestParameters) chatRequest.parameters();
         validate(parameters);
 
+        // 构建 OpenAI 流式对话请求：启用流式输出 + 返回 token 用量
         ChatCompletionRequest openAiRequest =
                 toOpenAiChatRequest(chatRequest, parameters, strictTools, strictJsonSchema)
                         .stream(true)
@@ -119,15 +120,21 @@ public class OpenAiStreamingChatModel implements StreamingChatModel {
                                 .build())
                         .build();
 
+        // 构建响应累积器（用于流式拼装完整响应）
         OpenAiStreamingResponseBuilder openAiResponseBuilder = new OpenAiStreamingResponseBuilder();
+        // 构建工具请求累积器（用于流式拼装工具调用参数）
         ToolExecutionRequestBuilder toolBuilder = new ToolExecutionRequestBuilder();
 
+        // 发起流式请求并注册回调
         client.chatCompletion(openAiRequest)
+                // 每收到一个流式分片：累积响应并解析出文本/工具增量回调给处理器
                 .onPartialResponse(partialResponse -> {
                     openAiResponseBuilder.append(partialResponse);
                     handle(partialResponse, toolBuilder, handler);
                 })
+                // 流式完成后：若有工具请求则回调完成事件，最后回调完整响应
                 .onComplete(() -> {
+                    // 工具请求已完整则通知处理器
                     if (toolBuilder.hasToolExecutionRequests()) {
                         try {
                             handler.onCompleteToolExecutionRequest(toolBuilder.index(), toolBuilder.build());
@@ -135,6 +142,7 @@ public class OpenAiStreamingChatModel implements StreamingChatModel {
                             withLoggingExceptions(() -> handler.onError(e));
                         }
                     }
+                    // 构建并回调完整响应
                     ChatResponse chatResponse = openAiResponseBuilder.build();
                     try {
                         handler.onCompleteResponse(chatResponse);
@@ -142,36 +150,50 @@ public class OpenAiStreamingChatModel implements StreamingChatModel {
                         withLoggingExceptions(() -> handler.onError(e));
                     }
                 })
+                // 出错时映射异常并回调错误处理器
                 .onError(throwable -> {
                     RuntimeException mappedException = ExceptionMapper.DEFAULT.mapException(throwable);
                     withLoggingExceptions(() -> handler.onError(mappedException));
                 })
+                // 启动请求
                 .execute();
     }
 
+    /**
+     * 处理单个流式分片：提取文本增量或工具参数增量并回调给上层处理器
+     */
     private static void handle(ChatCompletionResponse partialResponse,
                                ToolExecutionRequestBuilder toolBuilder,
                                StreamingChatResponseHandler handler) {
+        // 空分片直接忽略
         if (partialResponse == null) {
             return;
         }
 
+        // 取候选响应列表
         List<ChatCompletionChoice> choices = partialResponse.choices();
+        // 无候选则忽略
         if (choices == null || choices.isEmpty()) {
             return;
         }
 
+        // 取第一个候选
         ChatCompletionChoice chatCompletionChoice = choices.get(0);
+        // 候选为空则忽略
         if (chatCompletionChoice == null) {
             return;
         }
 
+        // 取 delta（增量数据）
         Delta delta = chatCompletionChoice.delta();
+        // 无增量则忽略
         if (delta == null) {
             return;
         }
 
+        // 提取文本增量内容
         String content = delta.content();
+        // 文本非空则回调文本增量给处理器
         if (!isNullOrEmpty(content)) {
             try {
                 handler.onPartialResponse(content);

@@ -8,17 +8,27 @@ import com.zaxxer.hikari.HikariDataSource;
 
 import java.util.Map;
 
+/**
+ * MyBatis-Flex 代码生成器。
+ *
+ * <p>开发工具类（非生产代码）：根据数据库表结构自动生成 entity/mapper/service/controller
+ * 等代码，运行 main 方法即可生成。</p>
+ */
 public class MyBatisCodeGenerator {
 
     // 需要生成的表名
     private static final String[] TABLE_NAMES = {"chat_history"};
 
     public static void main(String[] args) {
-        // 获取数据源信息
+        // 获取数据源信息（从 application.yml 读取）
         Dict dict = YamlUtil.loadByPath("application.yml");
+        // 读取数据源配置块
         Map<String, Object> dataSourceConfig = dict.getByPath("spring.datasource");
+        // 数据库连接 URL
         String url = String.valueOf(dataSourceConfig.get("url"));
+        // 数据库用户名
         String username = String.valueOf(dataSourceConfig.get("username"));
+        // 数据库密码
         String password = String.valueOf(dataSourceConfig.get("password"));
         // 配置数据源
         HikariDataSource dataSource = new HikariDataSource();

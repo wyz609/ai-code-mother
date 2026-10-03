@@ -33,16 +33,25 @@ public class SimpleTextStreamHandler {
      */
     public Flux<String> handle(Flux<String> originFlux, ChatHistoryService chatHistoryService,
                                long appId, User loginUser){
+        // 创建流收集器（负责累积文本并落库）
         StreamCollector collector = new StreamCollector(chatHistoryService, appId, loginUser);
+        // 逐块收集内容，完成/出错时回调收集器
         return originFlux.doOnNext(collector::collect)
                 .doOnComplete(collector::onComplete)
                 .doOnError(collector::onError);
     }
 
+    /**
+     * 流收集器：累积响应文本，在流结束时保存为对话历史
+     */
     private static class StreamCollector {
+        // 累积 AI 响应文本
         private final StringBuilder aiResponseBuilder = new StringBuilder();
+        // 对话历史服务
         private final ChatHistoryService chatHistoryService;
+        // 应用 ID
         private final long appId;
+        // 登录用户
         private final User loginUser;
 
         public StreamCollector(ChatHistoryService chatHistoryService, long appId, User loginUser) {
@@ -59,7 +68,9 @@ public class SimpleTextStreamHandler {
         public void onComplete() {
             // 添加 AI 响应内容到对话历史
             String aiResponse = aiResponseBuilder.toString();
+            // 非空响应才保存
             if (StrUtil.isNotBlank(aiResponse)) {
+                // 保存为 AI 类型历史消息
                 chatHistoryService.addChatMessage(appId, aiResponse,
                         ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
             }
@@ -68,6 +79,7 @@ public class SimpleTextStreamHandler {
         public void onError(Throwable throwable) {
             // 添加错误信息到对话历史
             String errorMessage = "AI 回复失败" + throwable.getMessage();
+            // 保存为 ERROR 类型历史消息
             chatHistoryService.addChatMessage(appId, errorMessage,
                     ChatHistoryMessageTypeEnum.ERROR.getValue(), loginUser.getId());
         }

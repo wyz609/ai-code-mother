@@ -8,6 +8,7 @@ import com.jay.aicodemother.model.entity.User;
 import com.jay.aicodemother.model.enums.CodeGenTypeEnum;
 import com.jay.aicodemother.service.AppService;
 import com.jay.aicodemother.service.ProjectDownloadService;
+import com.jay.aicodemother.service.PreviewTokenService;
 import com.jay.aicodemother.service.UserService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +23,7 @@ import org.springframework.web.servlet.HandlerMapping;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -47,7 +49,8 @@ class AppControllerPreviewTest {
                 appService,
                 userService,
                 mock(ProjectDownloadService.class),
-                mock(AiCodeGenTypeRoutingService.class)
+                mock(AiCodeGenTypeRoutingService.class),
+                new PreviewTokenService()
         );
         app = App.builder()
                 .id(APP_ID)
@@ -62,6 +65,23 @@ class AppControllerPreviewTest {
         Files.createDirectories(projectRoot.resolve("dist/assets"));
         Files.writeString(projectRoot.resolve("dist/index.html"), "<div id=\"app\"></div>");
         Files.writeString(projectRoot.resolve("dist/assets/index.js"), "console.log('ready')");
+    }
+
+    @Test
+    void updatedAssetMakesPreviewFreshWhenEntryFileIsUnchanged() throws IOException {
+        long generatedAfter = System.currentTimeMillis() - 1_000;
+        Files.setLastModifiedTime(projectRoot.resolve("dist/index.html"),
+                FileTime.fromMillis(generatedAfter - 5_000));
+        Files.setLastModifiedTime(projectRoot.resolve("dist/assets/index.js"),
+                FileTime.fromMillis(generatedAfter + 500));
+
+        ResponseEntity<Resource> response = controller.preview(
+                APP_ID,
+                generatedAfter,
+                previewRequest("/app/preview/" + APP_ID + "/")
+        );
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
     }
 
     @AfterEach

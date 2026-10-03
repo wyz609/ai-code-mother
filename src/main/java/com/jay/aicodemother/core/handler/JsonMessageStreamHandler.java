@@ -60,28 +60,36 @@ public class JsonMessageStreamHandler {
         StringBuilder chatHistoryStringBuilder = new StringBuilder();
         // 用于跟踪已经见过的工具 ID， 判断是否为第一次出现 避免重复显示工具调用信息
         Set<String> seenToolIds = new HashSet<>();
+        // 对原始流做逐块转换：解析并处理每种消息类型
         return originFlux.mapNotNull(chunk -> {
-            // 解析每个 JSON 消息块
+            // 解析并处理单个 JSON 消息块，返回需要转发给前端的内容
             return handleJsonMessageChunk(chunk, chatHistoryStringBuilder, seenToolIds);
         })
+                // 过滤空内容（重复工具调用等返回空串的场景）
                 .filter(StrUtil::isNotEmpty)
                 .doOnComplete(() -> {
                     // 流式响应完成后， 添加 AI 消息到对话历史
                     String aiResponse = chatHistoryStringBuilder.toString();
                     try {
+                        // 将累积的 AI 响应保存为一条 AI 类型的历史消息
                         boolean success = chatHistoryService.addChatMessage(appId, aiResponse, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
+                        // 保存失败仅记录日志
                         if (!success) {
                             log.error("保存AI响应到对话历史失败，appId: {}", appId);
                         }
                     } catch (Exception e) {
+                        // 异常也仅记录日志
                         log.error("保存AI响应到对话历史时发生异常，appId: {}", appId, e);
                     }
-                    // 异步构建 Vue 项目
+                    // 异步构建 Vue 项目（npm install + npm run build）
                     String projectPath = AppConstant.CODE_OUTPUT_ROOT_DIR + System.getProperty("file.separator") + "vue_project_" + appId;
                     File projectDir = new File(projectPath);
+                    // 只有项目目录完整且存在 package.json 才构建
                     if (projectDir.isDirectory() && new File(projectDir, "package.json").exists()) {
+                        // 异步触发构建，不阻塞响应
                         vueProjectBuilder.buildProjectAsync(projectPath);
                     } else {
+                        // 文件未生成完整时跳过构建
                         log.warn("Vue 项目文件尚未生成完整，跳过构建，appId: {}, 目录: {}", appId, projectPath);
                     }
                 })
@@ -89,31 +97,44 @@ public class JsonMessageStreamHandler {
                     // 如果 AI 回复失败， 也需要记录错误信息
                     String errorMessage = " AI 回复失败：" + error.getMessage();
                     try {
+                        // 将错误信息保存为一条 ERROR 类型的历史消息
                         boolean success = chatHistoryService.addChatMessage(appId, errorMessage, ChatHistoryMessageTypeEnum.ERROR.getValue(), loginUser.getId());
+                        // 保存失败仅记录日志
                         if (!success) {
                             log.error("保存错误信息到对话历史失败，appId: {}", appId);
                         }
                     } catch (Exception e) {
+                        // 异常仅记录日志
                         log.error("保存错误信息到对话历史时发生异常，appId: {}", appId, e);
                     }
                 });
     }
 
+    /**
+     * 解析并处理单个 JSON 消息块，根据消息类型分发处理
+     */
     private String handleJsonMessageChunk(String chunk, StringBuilder chatHistoryStringBuilder, Set<String> seenToolIds) {
-
+        // 将 JSON 字符串解析为流消息对象
         StreamMessage streamMessage = JSONUtil.toBean(chunk, StreamMessage.class);
+        // 根据类型枚举分发处理
         StreamMessageTypeEnum type = StreamMessageTypeEnum.getEnumByValue(streamMessage.getType());
         switch (Objects.requireNonNull(type)){
+            // AI 响应类型：直接转发给前端并累积到历史
             case  AI_RESPONSE -> {
+                // 解析为 AI 响应消息
                 AIResponseMessage aiMessage = JSONUtil.toBean(chunk, AIResponseMessage.class);
                 String data = aiMessage.getData();
-                // 拼接响应
+                // 拼接响应到历史缓冲
                 chatHistoryStringBuilder.append(data);
                 return data; // 将响应返回给前端
             }
+            // 工具请求类型：生成工具调用提示，去重处理
             case TOOL_REQUEST -> {
+                // 解析为工具请求消息
                 ToolRequestMessage toolRequestMessage = JSONUtil.toBean(chunk, ToolRequestMessage.class);
+                // 取工具调用 ID
                 String toolId = toolRequestMessage.getId();
+                // 取工具名称
                 String toolName = toolRequestMessage.getName();
                 // 检查是否为第一次调用这个工具 ID
                 if(toolId != null && !seenToolIds.contains(toolId)){
@@ -121,23 +142,29 @@ public class JsonMessageStreamHandler {
                     seenToolIds.add(toolId);
                     // 根据工具名称获取工具实例
                     BaseTool tool = toolManage.getTool(toolName);
-                    // 生成工具调用信息
+                    // 生成工具调用信息（前端展示用）
                     String result = tool.generateToolRequestResponse();
+                    // 记录工具选择日志
                     log.info("[选择工具] 工具调用：{}", toolId);
                     return result;
                 }else{
+                    // 重复调用同一工具 ID 时忽略
                     log.info("[选择工具] 忽略重复工具调用：{}", toolId);
                     // 不是第一次调用该工具， 直接返回空
                     return "";
                 }
             }
+            // 工具执行完成类型：生成执行结果文本
             case TOOL_EXECUTED -> {
+                // 解析为工具执行完成消息
                 ToolExecutedMessage toolExecutedMessage = JSONUtil.toBean(chunk, ToolExecutedMessage.class);
+                // 取工具名称
                 String toolName = toolExecutedMessage.getName();
+                // 解析工具参数
                 JSONObject jsonObject = JSONUtil.parseObj(toolExecutedMessage.getArguments());
                 // 根据工具名称获取到工具实例
                 BaseTool tool = toolManage.getTool(toolName);
-                // 根据工具实例获取到工具执行结果
+                // 根据工具实例获取到工具执行结果（含文件路径/成功/失败信息）
                 String response = tool.generateToolExecutedResult(jsonObject);
 //                String relativeFilePath = jsonObject.getStr("relativeFilePath");
 //                String suffix = FileUtil.getSuffix(relativeFilePath);
@@ -149,11 +176,13 @@ public class JsonMessageStreamHandler {
 //                                ```
 //                                """, relativeFilePath,suffix,content
 //                );
-                // 输出前端和要持久化的内容
+                // 输出前端和要持久化的内容（前后加空行便于阅读）
                 String output = String.format("\n\n%s\n\n", response);
+                // 累积到历史缓冲
                 chatHistoryStringBuilder.append(output);
                 return output; // 返回给前端进行实时输出
             }
+            // 未知消息类型
             default -> {
                 log.error("不支持的消息类型： {}", type);
                 return "";

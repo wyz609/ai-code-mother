@@ -118,6 +118,13 @@ class AiServiceStreamingResponseHandler implements StreamingChatResponseHandler 
     }
 
     @Override
+    public void onCompleteToolExecutionRequest(int index, ToolExecutionRequest completeToolExecutionRequest) {
+        if (completeToolExecutionRequestHandler != null) {
+            completeToolExecutionRequestHandler.accept(index, completeToolExecutionRequest);
+        }
+    }
+
+    @Override
     public void onCompleteResponse(ChatResponse completeResponse) {
         if (completeResponse == null || completeResponse.aiMessage() == null) {
             IllegalStateException error = new IllegalStateException(

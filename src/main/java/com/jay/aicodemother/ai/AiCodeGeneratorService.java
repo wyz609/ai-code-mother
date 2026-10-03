@@ -61,6 +61,18 @@ public interface AiCodeGeneratorService {
     Flux<String> generateMultiFileCodeStream(@MemoryId long appId, @UserMessage String userMessage);
 
     /**
+     * 修改已有 HTML 项目，并暴露文件工具执行事件。
+     */
+    @SystemMessage(fromResource = "prompt/codegen-html-system-prompt.txt")
+    TokenStream modifyHtmlCodeStream(@MemoryId long appId, @UserMessage String userMessage);
+
+    /**
+     * 修改已有多文件静态项目，并暴露文件工具执行事件。
+     */
+    @SystemMessage(fromResource = "prompt/codegen-multi-file-system-prompt.txt")
+    TokenStream modifyMultiFileCodeStream(@MemoryId long appId, @UserMessage String userMessage);
+
+    /**
      *  生成 Vue 项目代码（流式）
      * @param appId 应用 ID
      * @param userMessage 用户输入的提示词

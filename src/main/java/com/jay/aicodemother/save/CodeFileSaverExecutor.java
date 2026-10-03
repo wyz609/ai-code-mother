@@ -16,8 +16,10 @@ import java.io.File;
  */
 public class CodeFileSaverExecutor {
 
+    // HTML 单文件保存器实例
     private static final HtmlCodeFileSaverTemplate htmlCodeFileSaver = new HtmlCodeFileSaverTemplate();
 
+    // 多文件保存器实例
     private static final MultiFileCodeFileSaverTemplate multiFileCodeFileSaver = new MultiFileCodeFileSaverTemplate();
 
     /**
@@ -29,9 +31,13 @@ public class CodeFileSaverExecutor {
      * @return 保存的目录
      */
     public static File executeSaver(Object codeResult, CodeGenTypeEnum codeGenType, Long appId) {
+        // 按生成类型分发到对应保存器
         return switch (codeGenType) {
+            // HTML：用单文件保存器
             case HTML -> htmlCodeFileSaver.saveCode((HtmlCodeResult) codeResult, appId);
+            // 多文件：用多文件保存器
             case MULTI_FILE -> multiFileCodeFileSaver.saveCode((MultiFileCodeResult) codeResult, appId);
+            // 其他类型不支持
             default -> throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型: " + codeGenType);
         };
     }

@@ -49,16 +49,18 @@ public class StreamingChatModelConfig {
 
     @Bean("openAiStreamingChatModel")
     public OpenAiStreamingChatModel openAiStreamingChatModel() {
+        // 记录模型初始化日志
         log.info("初始化代码生成流式模型，baseUrl: {}, modelName: {}", baseUrl, modelName);
 
+        // 构建 OpenAI 兼容的流式聊天模型（用于代码生成）
         return OpenAiStreamingChatModel.builder()
-                .baseUrl(baseUrl)
-                .apiKey(apiKey)
-                .modelName(modelName)
-                .maxTokens(maxTokens)
-                .temperature(temperature)
-                .logRequests(logRequests)
-                .logResponses(logResponses)
+                .baseUrl(baseUrl)       // API 基础地址
+                .apiKey(apiKey)         // API 密钥
+                .modelName(modelName)   // 模型名称（如 deepseek-chat）
+                .maxTokens(maxTokens)   // 最大生成 token 数
+                .temperature(temperature) // 采样温度
+                .logRequests(logRequests) // 是否记录请求日志
+                .logResponses(logResponses) // 是否记录响应日志
                 .timeout(Duration.of(300, ChronoUnit.SECONDS)) // Vue 项目工具链较长，放宽超时
                 .build();
     }

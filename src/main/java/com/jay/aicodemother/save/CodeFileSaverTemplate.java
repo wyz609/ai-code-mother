@@ -28,11 +28,11 @@ public abstract class CodeFileSaverTemplate<T> {
      * @return 保存的目录
      */
     public final File saveCode(T result, Long appId) {
-        // 1. 验证输入
+        // 1. 验证输入（结果对象不能为空）
         validateInput(result);
-        // 2. 构建唯一目录
+        // 2. 构建唯一目录（目录名：{类型}_{appId}）
         String baseDirPath = buildUniqueDir(appId);
-        // 3. 保存文件（具体实现由子类提供）
+        // 3. 保存文件（具体实现由子类提供：HTML 存单文件，多文件存三个文件）
         saveFiles(result, baseDirPath);
         // 4. 返回目录文件对象
         return new File(baseDirPath);
@@ -44,6 +44,7 @@ public abstract class CodeFileSaverTemplate<T> {
      * @param result 代码结果对象
      */
     protected void validateInput(T result) {
+        // 结果对象为空则抛出系统异常
         if (result == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "代码结果对象不能为空");
         }
@@ -56,13 +57,19 @@ public abstract class CodeFileSaverTemplate<T> {
      * @param appId 应用ID
      */
     protected final String buildUniqueDir(Long appId) {
+        // 应用 ID 为空则报错
         if (appId == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "应用ID不能为空");
         }
+        // 取代码生成类型值（如 html、multi_file）
         String codeType = getCodeType().getValue();
+        // 目录名格式：{类型}_{appId}（保证每个应用有独立目录）
         String uniqueDirName = StrUtil.format("{}_{}", codeType, appId);
+        // 拼接根目录路径
         String dirPath = FILE_SAVE_ROOT_DIR + File.separator + uniqueDirName;
+        // 创建目录（含父目录）
         FileUtil.mkdir(dirPath);
+        // 返回目录路径
         return dirPath;
     }
 
@@ -74,8 +81,11 @@ public abstract class CodeFileSaverTemplate<T> {
      * @param content  文件内容
      */
     protected final void writeToFile(String dirPath, String filename, String content) {
+        // 内容非空才写文件（避免生成空文件）
         if (StrUtil.isNotBlank(content)) {
+            // 拼接文件完整路径
             String filePath = dirPath + File.separator + filename;
+            // 以 UTF-8 编码写入
             FileUtil.writeString(content, filePath, StandardCharsets.UTF_8);
         }
     }

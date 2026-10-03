@@ -51,8 +51,11 @@ public class ChatHistoryController {
                                                               @RequestParam(defaultValue = "10") int pageSize,
                                                               @RequestParam(required = false) LocalDateTime lastCreateTime,
                                                               HttpServletRequest request) {
+        // 获取当前登录用户（用于校验是否可查看该应用的对话历史）
         User loginUser = userService.getLoginUser(request);
+        // 按游标分页查询该应用的对话历史（仅返回 createTime 早于 lastCreateTime 的记录）
         Page<ChatHistory> result = chatHistoryService.listAppChatHistoryByPage(appId, pageSize, lastCreateTime, loginUser);
+        // 返回分页结果
         return ResultUtils.success(result);
     }
 
@@ -65,12 +68,17 @@ public class ChatHistoryController {
     @PostMapping("/admin/list/page/vo")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Page<ChatHistory>> listAllChatHistoryByPageForAdmin(@RequestBody ChatHistoryQueryRequest chatHistoryQueryRequest) {
+        // 请求体不能为空
         ThrowUtils.throwIf(chatHistoryQueryRequest == null, ErrorCode.PARAMS_ERROR);
+        // 取出分页页码
         long pageNum = chatHistoryQueryRequest.getPageNum();
+        // 取出分页大小
         long pageSize = chatHistoryQueryRequest.getPageSize();
-        // 查询数据
+        // 查询数据：根据查询条件（应用ID/用户ID/消息类型等）构建查询包装器
         QueryWrapper queryWrapper = chatHistoryService.getQueryWrapper(chatHistoryQueryRequest);
+        // 执行分页查询
         Page<ChatHistory> result = chatHistoryService.page(Page.of(pageNum, pageSize), queryWrapper);
+        // 返回分页结果
         return ResultUtils.success(result);
     }
 }

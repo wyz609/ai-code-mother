@@ -3,12 +3,14 @@ package com.jay.aicodemother.service;
 import com.jay.aicodemother.model.dto.app.AppQueryRequest;
 import com.jay.aicodemother.model.entity.User;
 import com.jay.aicodemother.model.vo.AppVO;
+import com.jay.aicodemother.model.vo.ProjectFileVO;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
 import com.jay.aicodemother.model.entity.App;
 import com.mybatisflex.core.paginate.Page;
 import reactor.core.publisher.Flux;
 
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -33,6 +35,13 @@ public interface AppService extends IService<App> {
      * @return 脱敏后的应用列表
      */
     List<AppVO> getAppVOList(List<App> appList);
+
+    /**
+     * 查看代码文件
+     * @param path    代码文件目录
+     * * @return 返回能查看的代码文件
+     */
+    List<ProjectFileVO> getListProject(Path path, Long appId);
 
     /**
      *  生成代码

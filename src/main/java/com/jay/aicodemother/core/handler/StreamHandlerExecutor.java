@@ -44,13 +44,16 @@ public class StreamHandlerExecutor {
                                   long appId,
                                   User loginUser, CodeGenTypeEnum codeGenType){
         switch (codeGenType){
+            // Vue 工程：使用 JSON 消息流处理器（处理工具调用等复杂事件）
             case VUE_PROJECT:
                 // 使用注入的组件实例
                 return jsonMessageStreamHandler.handle(originFlux, chatHistoryService, appId, loginUser);
+            // HTML / 多文件：使用简单文本流处理器（直接收集文本）
             case HTML:
             case MULTI_FILE:
                 // 使用注入的组件实例
                 return simpleTextStreamHandler.handle(originFlux, chatHistoryService, appId, loginUser);
+            // 不支持的生成类型
             default:
                 throw new IllegalArgumentException("Unsupported code generation type: " + codeGenType);
         }

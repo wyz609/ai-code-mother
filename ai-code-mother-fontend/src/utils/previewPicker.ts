@@ -196,8 +196,11 @@ export const PICKER_SCRIPT = `(function () {
 export const buildPreviewDoc = (html: string, baseHref: string): string => {
   const base = `<base href="${baseHref}">`
   const script = `<script>${PICKER_SCRIPT}<\/script>`
-  const head = base + script
-  if (html.includes('</head>')) return html.replace('</head>', `${head}</head>`)
-  if (html.includes('<head>')) return html.replace('<head>', `<head>${head}`)
-  return `${head}${html}`
+  if (html.includes('<head')) {
+    // 关键：<base> 必须位于 <head> 开头，早于任何 src/href 引用，
+    // 否则它之前出现的相对路径（如 dist/index.html 的 ./assets/...）仍按
+    // srcdoc 的原文档 URL 解析，导致资源 404/CORS 失败。
+    return html.replace(/<head[^>]*>/i, m => `${m}${base}`).replace('</head>', `${script}</head>`)
+  }
+  return `${base}${script}${html}`
 }

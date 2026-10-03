@@ -328,6 +328,20 @@
             <span class="switch-track"><i class="switch-knob"></i></span>
             拖拽修改
           </button>
+            <button
+              class="open-window-btn deploy-btn"
+              :disabled="!canDeploy || deploying"
+              @click="handleDeploy"
+              title="部署当前应用，生成可访问的线上版本"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z"/>
+                <path d="M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z"/>
+                <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+                <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+              </svg>
+              {{ deploying ? '部署中' : '部署' }}
+            </button>
           <button
             class="open-window-btn"
             :disabled="!canOpenPreview"
@@ -360,8 +374,8 @@
               class="preview-iframe"
               :srcdoc="previewDoc"
               title="应用实时预览"
-              sandbox="allow-scripts"
-              @load="syncPickEnabled"
+              sandbox="allow-scripts allow-same-origin"
+              @load="onPreviewFrameLoad"
             ></iframe>
             <iframe
               v-else
@@ -369,8 +383,8 @@
               class="preview-iframe"
               :src="previewUrl"
               title="应用实时预览"
-              sandbox="allow-scripts"
-              @load="syncPickEnabled"
+              sandbox="allow-scripts allow-same-origin"
+              @load="onPreviewFrameLoad"
             ></iframe>
           </div>
 
@@ -380,7 +394,7 @@
               class="preview-iframe"
               :srcdoc="livePreviewHtml"
               title="实时预览（生成中）"
-              sandbox="allow-scripts"
+              sandbox="allow-scripts allow-same-origin"
             ></iframe>
           </div>
 
@@ -501,9 +515,9 @@ import { ref, computed, watch, onMounted, nextTick, onUnmounted, type Component 
 import { useRoute, useRouter } from 'vue-router'
 import { message as antMessage } from 'ant-design-vue'
 import { CodeOutlined, FolderOpenOutlined, FileTextOutlined, EditOutlined, LoadingOutlined, ToolOutlined } from '@ant-design/icons-vue'
-import { createPreviewToken, getAppById, getProjectFiles } from '@/api/appController'
+import { createPreviewToken, deployApp, getAppById, getProjectFiles } from '@/api/appController'
 import { listAppChatHistory } from '@/api/chatHistoryController'
-import { buildPreviewDoc } from '@/utils/previewPicker'
+import { buildPreviewDoc, PICKER_SCRIPT } from '@/utils/previewPicker'
 import ContextReferenceCard from '@/components/ContextReferenceCard.vue'
 import EditAppModal from '@/components/EditAppModal.vue'
 import MarkdownIt from 'markdown-it'
@@ -562,9 +576,6 @@ interface ReferenceElement {
 const route = useRoute()
 const router = useRouter()
 const appId = route.params.id as string
-const generatedPreviewOrigin = (
-  import.meta.env.VITE_GENERATED_PREVIEW_ORIGIN || 'http://localhost:8088'
-).replace(/\/+$/, '')
 
 // 状态
 const messages = ref<ChatMessage[]>([])
@@ -578,6 +589,7 @@ const appInfo = ref<API.AppVO | null>(null)
 const activeTab = ref<'preview' | 'code'>('preview')
 const extractedCode = ref('')
 const codeComplete = ref(false)
+const deploying = ref(false)
 const previewUrl = ref('')
 const previewReady = ref(false)
 // 注入拾取脚本后的预览文档（srcdoc 模式）；为空时回退为 :src 直连
@@ -692,6 +704,7 @@ const parseAiContent = (content: string, messageFinished = false): ContentToken[
   for (const line of content.split('\n')) {
     const toolMatch = line.match(/^\[工具调用\]\s*(\S+)(?:\s+(\S+\.\w+))?/)
     const doneMatch = line.match(/^✓\s*(.+)$/)
+    const failedMatch = line.match(/^\[工具失败\]\s*(.+)$/)
     if (toolMatch) {
       flushText()
       pendingTool = {
@@ -702,6 +715,22 @@ const parseAiContent = (content: string, messageFinished = false): ContentToken[
         success: false,
       }
       tokens.push(pendingTool)
+    } else if (failedMatch) {
+      flushText()
+      if (pendingTool) {
+        pendingTool.done = true
+        pendingTool.success = false
+        pendingTool.file = pendingTool.file || failedMatch[1].trim()
+        pendingTool = null
+      } else {
+        tokens.push({
+          type: 'tool',
+          name: '文件操作',
+          file: failedMatch[1].trim(),
+          done: true,
+          success: false,
+        })
+      }
     } else if (doneMatch) {
       flushText()
       if (pendingTool) {
@@ -783,14 +812,19 @@ const extractLivePreview = (content: string) => {
   }
 }
 
-// 是否可打开新窗口预览
+// 是否可打开新窗口预览：
+// 不再强依赖 previewReady（首次进入/构建未完成时可能为 false 导致按钮永久禁用），
+// 对话完成且非生成中即视为可操作，点击时触发懒加载。
 const canOpenPreview = computed(() => {
-  return previewReady.value && codeComplete.value && !generating.value
+  return codeComplete.value && !generating.value
 })
 
 const canShowPreview = computed(() => {
   return previewReady.value && codeComplete.value && !generating.value
 })
+
+// 是否可部署：代码已生成完成且当前没有正在进行的生成任务
+const canDeploy = computed(() => codeComplete.value && !generating.value)
 
 // 获取渲染后的 Markdown（带缓存 + 工具调用增强 + 代码块头部与复制按钮）
 const getRenderedMarkdown = (msgId: string): string => {
@@ -1158,9 +1192,42 @@ const feedback = (msg: ChatMessage, type: 'up' | 'down') => {
 /* ---------- 拖拽引用：右侧预览元素 → 输入框上下文（postMessage 手动拖拽） ---------- */
 const pickMode = ref(false)
 let pickPayload: ReferenceElement | null = null
+// :src 模式（vue_project）下拾取脚本是否已注入 iframe
+let pickerInjectedInFrame = false
 
-const togglePickMode = () => {
+// iframe 加载完成后：srcdoc 模式脚本已内联；:src 模式（同源）在此直接注入拾取脚本
+const onPreviewFrameLoad = () => {
+  syncPickEnabled()
+  if (previewMode.value !== 'src') return
+  try {
+    const frameDoc = previewIframe.value?.contentDocument
+    const frameWin = previewIframe.value?.contentWindow as (Window & typeof globalThis) | null
+    if (!frameDoc || !frameWin || pickerInjectedInFrame) return
+    if (frameDoc.getElementById('ai-pick-picker-script')) return
+    const scriptEl = frameDoc.createElement('script')
+    scriptEl.id = 'ai-pick-picker-script'
+    scriptEl.textContent = PICKER_SCRIPT
+    frameDoc.head.appendChild(scriptEl)
+    pickerInjectedInFrame = true
+    // 注入后同步当前启停状态
+    syncPickEnabled()
+  } catch (error) {
+    console.warn('同源注入拾取脚本失败（预览可能跨域）', error)
+  }
+}
+
+const togglePickMode = async () => {
   if (!canOpenPreview.value) return
+  // 预览未就绪（如构建中/首次加载失败）时先懒加载一次
+  if (!previewReady.value) {
+    antMessage.loading({ content: '正在准备预览，请稍候…', key: 'preview-loading', duration: 0 })
+    const ok = await loadProjectPreview().catch(() => false)
+    antMessage.destroy('preview-loading')
+    if (!ok) {
+      antMessage.warning('预览尚未就绪，请稍后重试')
+      return
+    }
+  }
   pickMode.value = !pickMode.value
   // 同步拾取脚本启停状态（iframe 常驻不重建，避免切换闪烁）
   syncPickEnabled()
@@ -1171,7 +1238,7 @@ const togglePickMode = () => {
     window.removeEventListener('mouseup', handlePickUp)
     // 关闭拾取时通知 iframe 复位并解锁文本选择
     previewIframe.value?.contentWindow?.postMessage({ type: 'pick-end' }, '*')
-  } else if (!previewDoc.value) {
+  } else if (!previewDoc.value && !pickerInjectedInFrame && previewMode.value !== 'src') {
     antMessage.info('当前预览不支持拾取（注入失败），将仅展示')
   }
 }
@@ -1258,18 +1325,23 @@ const loadProjectPreview = async (generatedAfter?: number) => {
   const contentType = response.headers.get('content-type') || ''
   if (!response.ok || !contentType.includes('text/html')) return false
 
+  // 统一走后端 token 预览接口：
+  // 后端对 vue_project 类型自动读取 dist 目录，且生成的 dist/index.html 使用
+  // 相对路径（base: './'），token 路径前缀会被后端剥离，资源均可正常加载。
+  const tokenResponse = await createPreviewToken({ appId })
+  const token = tokenResponse.data.data
+  if (tokenResponse.data.code !== 0 || !token) return false
+  previewUrl.value = `${previewBaseUrl}${token}/?t=${Date.now()}`
+
   if (appInfo.value?.codeGenType === 'vue_project') {
-    previewUrl.value = `${generatedPreviewOrigin}/preview/${appId}/?t=${Date.now()}`
-    // 尝试注入拾取脚本；跨域且无 CORS 时回退直连
-    previewDoc.value = await tryBuildInjectedDoc(previewUrl.value, `${generatedPreviewOrigin}/preview/${appId}/`)
+    // Vue 工程（history 模式路由）在 srcdoc 文档中调用 History API 会抛
+    // SecurityError，必须用真实 URL（:src）加载；拾取脚本改由 iframe 同源注入。
+    previewDoc.value = ''
+    previewMode.value = 'src'
   } else {
-    const tokenResponse = await createPreviewToken({ appId })
-    const token = tokenResponse.data.data
-    if (tokenResponse.data.code !== 0 || !token) return false
-    previewUrl.value = `${previewBaseUrl}${token}/?t=${Date.now()}`
     previewDoc.value = await tryBuildInjectedDoc(previewUrl.value, `${previewBaseUrl}${token}/`)
+    previewMode.value = previewDoc.value ? 'srcdoc' : 'src'
   }
-  previewMode.value = previewDoc.value ? 'srcdoc' : 'src'
   previewReady.value = true
   return true
 }
@@ -1505,11 +1577,19 @@ const sendMessage = async (promptTextArg?: string) => {
     eventSource?.close()
     streamCompleted.value = true
     pendingCompletion = async () => {
+      const previewTask = appInfo.value?.codeGenType === 'vue_project'
+        ? waitForProjectPreview(generationStartedAt)
+        : loadProjectPreview(generationStartedAt).catch(() => false)
       const [previewLoaded, filesLoaded] = await Promise.all([
-        waitForProjectPreview(generationStartedAt),
+        previewTask,
         loadProjectFiles()
       ])
-      if (!filesLoaded) extractAllCodeFiles(assistantMessage.content)
+      if (!filesLoaded) {
+        extractAllCodeFiles(assistantMessage.content)
+        if (!previewLoaded && extractedCode.value) {
+          livePreviewHtml.value = extractedCode.value
+        }
+      }
       previewReady.value = previewLoaded
       codeComplete.value = true
       generating.value = false
@@ -1585,9 +1665,40 @@ const refreshPreview = async () => {
 }
 
 // 在新窗口打开构建好的网站预览
-const openPreviewWindow = () => {
-  if (!previewUrl.value || !canOpenPreview.value) return
+const openPreviewWindow = async () => {
+  if (!canOpenPreview.value) return
+  // 预览未就绪时先懒加载一次，失败则提示
+  if (!previewReady.value) {
+    antMessage.loading({ content: '正在准备预览，请稍候…', key: 'preview-loading', duration: 0 })
+    const ok = await loadProjectPreview().catch(() => false)
+    antMessage.destroy('preview-loading')
+    if (!ok) {
+      antMessage.warning('预览尚未就绪，请稍后重试')
+      return
+    }
+  }
+  if (!previewUrl.value) return
   window.open(previewUrl.value, '_blank', 'noopener,noreferrer')
+}
+
+// 部署当前应用
+const handleDeploy = async () => {
+  if (!appId || deploying.value) return
+  deploying.value = true
+  try {
+    const res = await deployApp({ appId })
+    if (res.data.code === 0 && res.data.data) {
+      antMessage.success('部署成功')
+      window.open(res.data.data, '_blank', 'noopener,noreferrer')
+    } else {
+      antMessage.error(res.data.message || '部署失败')
+    }
+  } catch (error) {
+    console.error('部署应用失败', error)
+    antMessage.error('部署失败，请重试')
+  } finally {
+    deploying.value = false
+  }
 }
 
 // 自动调整文本框高度
@@ -1660,12 +1771,19 @@ onMounted(async () => {
     loadProjectFiles(),
     loadChatHistory(),
   ])
-  if (!hasInitPrompt) codeComplete.value = previewLoaded
+  // 无初始提示词（已生成过的应用）时，对话本身已完成，允许打开预览/新窗口，
+  // 预览内容若尚未就绪（如构建中），点击时会再次懒加载。
+  if (!hasInitPrompt) codeComplete.value = true
 
   // 项目文件接口无数据时，从最后一条 AI 回复中提取代码文件作为兜底
   if (codeFiles.value.length === 0) {
     const lastAi = [...messages.value].reverse().find(m => m.role === 'assistant')
-    if (lastAi) extractAllCodeFiles(lastAi.content)
+    if (lastAi) {
+      extractAllCodeFiles(lastAi.content)
+      if (!previewLoaded && extractedCode.value) {
+        livePreviewHtml.value = extractedCode.value
+      }
+    }
   }
 
   // 有历史消息时滚动到底部
@@ -1979,6 +2097,25 @@ onMounted(async () => {
 }
 
 .open-window-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* 部署按钮：复用 open-window-btn 结构，使用蓝色主题与预览按钮区分 */
+.deploy-btn {
+  border-color: rgba(96, 165, 250, 0.4);
+  background: rgba(59, 130, 246, 0.12);
+  color: #93c5fd;
+}
+
+.deploy-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(96, 165, 250, 0.7);
+  color: #bfdbfe;
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.22);
+}
+
+.deploy-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }

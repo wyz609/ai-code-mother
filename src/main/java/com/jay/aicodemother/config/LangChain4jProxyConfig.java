@@ -25,6 +25,7 @@ import java.util.concurrent.Executors;
 @Configuration
 public class LangChain4jProxyConfig {
 
+    // 注入代理配置
     @Autowired
     private ProxyConfig proxyConfig;
 
@@ -34,11 +35,14 @@ public class LangChain4jProxyConfig {
      */
     @PostConstruct
     public void configureProxy() {
+        // 仅在启用代理时配置
         if (proxyConfig.isEnabled()) {
+            // 取代理主机
             String proxyHost = proxyConfig.getHost();
+            // 取代理端口
             int proxyPort = proxyConfig.getPort();
 
-            // 设置 HTTP 代理
+            // 设置 HTTP 代理（JVM 全局系统属性）
             System.setProperty("http.proxyHost", proxyHost);
             System.setProperty("http.proxyPort", String.valueOf(proxyPort));
 
@@ -46,11 +50,13 @@ public class LangChain4jProxyConfig {
             System.setProperty("https.proxyHost", proxyHost);
             System.setProperty("https.proxyPort", String.valueOf(proxyPort));
 
-            // 不代理本地地址
+            // 不代理本地地址（本地请求直连）
             System.setProperty("http.nonProxyHosts", "localhost|127.0.0.1|*.local");
 
+            // 记录代理配置日志
             log.info("已配置 HTTP/HTTPS 代理: {}:{}", proxyHost, proxyPort);
         } else {
+            // 未启用代理
             log.info("代理未启用");
         }
     }
